@@ -4,3 +4,23 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+wgpu = "0.20.1"
+winit = "0.30.3"
+
+bytemuck = { version = "1.16.1", features = [ "derive" ] }
+pollster = "0.3.0"
+hashbrown = "0.14.5"
+strum = { version = "0.26.3", features = ["derive"] }
+nalgebra = "0.33.0"
+
+log = "0.4.22"
+env_logger = "0.11.3"
+
+[profile.flamegraph]
+inherits = "release"
+debug = true
+
+[profile.flamegraph_no_inline]
+inherits = "release"
+debug = true
+opt-level=0
