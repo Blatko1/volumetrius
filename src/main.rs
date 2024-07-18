@@ -11,7 +11,7 @@ use bvh::bounding_hierarchy::BoundingHierarchy;
 use control::{ControllerSettings, GameInput};
 use nalgebra::{Point3, Vector2, Vector3};
 use pollster::block_on;
-use renderer::{Camera, Renderer};
+use renderer::{Camera, Renderer, World};
 use shape::Object;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, StartCause};
@@ -24,8 +24,8 @@ use winit::{
 };
 
 const FPS_CAP: u32 = 60;
-const CANVAS_WIDTH: u32 = 300;
-const CANVAS_HEIGHT: u32 = 150;
+const CANVAS_WIDTH: u32 = 90;
+const CANVAS_HEIGHT: u32 = 45;
 const PHYSICS_TIMESTEP: f32 = 0.01;
 const SLEEP_BETWEEN_FRAMES: bool = false;
 
@@ -48,7 +48,7 @@ impl State {
             canvas: None,
             renderer: Renderer::new(CANVAS_WIDTH, CANVAS_HEIGHT),
             controls: ControllerSettings::init(),
-            camera: Camera::new(CANVAS_WIDTH, CANVAS_HEIGHT, Point3::origin(), 90.0, 0.0, 90.0),
+            camera: Camera::new(CANVAS_WIDTH, CANVAS_HEIGHT, Point3::new(-1.0, 0.0, 1.0), 90.0, 0.0, 90.0),
 
             delta_accumulator: 0.0,
             time_per_frame: Duration::from_secs_f64(1.0 / FPS_CAP as f64),

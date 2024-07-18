@@ -16,12 +16,20 @@ pub struct World {
 impl World {
     pub fn new() -> Self {
         let object = Object::new(
-            10,
-            10,
-            Point3::new(-5.0, -5.0, 5.0),
+            5,
+            5,
+            5,
+            Point3::new(5.0, 5.0, 5.0),
             Point3::new(10.0, 10.0, 10.0),
         );
-        let mut objects: Vec<Object> = vec![object];
+        let object2 = Object::new(
+            5,
+            5,
+            5,
+            Point3::new(-10.0, -10.0, -10.0),
+            Point3::new(-5.0, -5.0, -5.0),
+        );
+        let mut objects: Vec<Object> = vec![object, object2];
         let bvh = Bvh::build(&mut objects);
         Self { objects, bvh }
     }
@@ -109,8 +117,9 @@ impl Camera {
     }
 
     pub fn process_mouse_motion(&mut self, delta_x: f32, delta_y: f32) {
-        self.yaw = normalize_rad(self.yaw - delta_x * 0.01);
-        self.pitch = normalize_rad(self.pitch + delta_y * 0.01);
+        // TODO treba biti minus pa plus
+        self.yaw = normalize_rad(self.yaw + delta_x * 0.01);
+        self.pitch = normalize_rad(self.pitch - delta_y * 0.01);
 
         self.dir.x = self.yaw.cos() * self.pitch.cos();
         self.dir.y = self.pitch.sin();
@@ -184,20 +193,19 @@ impl Renderer {
         let plane_y = 2.0 * y / self.height as f32 - 1.0;
         let ray_2d = plane_x * camera.plane_h + plane_y * camera.plane_v;
         
-        let ray = ray_2d + camera.dir * camera.focal_distance;
-        let mag = ray.normalize().magnitude();
-        pixel[0] = (mag * 255.0) as u8;
-        pixel[1] = (mag * 255.0) as u8;
-        pixel[2] = (mag * 255.0) as u8;
-/*
-        let ray = Ray::new(camera.origin, ray);
-        if !self.world.traverse(&ray).is_empty() {
+        let ray_direction = ray_2d + camera.dir * camera.focal_distance;
+
+        let ray = Ray::new(camera.origin, ray_direction);
+        let hits = self.world.traverse(&ray);
+        //println!("hits: {hits:?}");
+        if !hits.is_empty() {
             pixel[0] = 255;
             pixel[1] = 0;
+            
         } else {
-            pixel[1] = 255;
             pixel[0] = 0;
-        }*/
+            pixel[1] = 255;
+        }
         /*if ray.x > 0.3 && ray.y > 0.3 {
             pixel[0] = 255;
             pixel[1] = 0;

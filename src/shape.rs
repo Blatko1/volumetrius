@@ -1,9 +1,11 @@
 use bvh::{aabb::{Aabb, Bounded}, bounding_hierarchy::BHShape};
 use nalgebra::{Point3, Vector3};
 
+#[derive(Debug)]
 pub struct Object {
     width: usize,
     height: usize,
+    depth: usize,
     data: Vec<u8>,
     
     min: Point3<f32>,
@@ -13,11 +15,12 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn new(width: usize, height: usize, min: Point3<f32>, max: Point3<f32>) -> Self {
+    pub fn new(width: usize, height: usize, depth: usize, min: Point3<f32>, max: Point3<f32>) -> Self {
         Self {
             width,
             height,
-            data: Vec::with_capacity(width * height),
+            depth,
+            data: Vec::with_capacity(width * height * depth),
 
             min,
             max,
