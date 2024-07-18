@@ -25,6 +25,8 @@ impl ControllerSettings {
             GameInput::Jump => KeyCode::Space,
             GameInput::FlyUp => KeyCode::Space,
             GameInput::FlyDown => KeyCode::ShiftLeft,
+            GameInput::IncreaseFOV => KeyCode::PageUp,
+            GameInput::DecreaseFOV => KeyCode::PageDown,
             GameInput::PhysicsSwitch => KeyCode::Equal,
             GameInput::QuitGame => KeyCode::Escape,
         }
@@ -59,6 +61,8 @@ pub enum GameInput {
     Jump,
     FlyUp,
     FlyDown,
+    IncreaseFOV,
+    DecreaseFOV,
     PhysicsSwitch,
     QuitGame
 }

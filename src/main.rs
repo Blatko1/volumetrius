@@ -1,4 +1,5 @@
 mod backend;
+mod camera;
 mod control;
 mod renderer;
 mod shape;
@@ -7,12 +8,11 @@ use std::time::{Duration, Instant};
 
 use backend::ctx::Ctx;
 use backend::Canvas;
-use bvh::bounding_hierarchy::BoundingHierarchy;
+use camera::Camera;
 use control::{ControllerSettings, GameInput};
-use nalgebra::{Point3, Vector2, Vector3};
+use nalgebra::Point3;
 use pollster::block_on;
-use renderer::{Camera, Renderer, World};
-use shape::Object;
+use renderer::Renderer;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, StartCause};
 use winit::event_loop::ActiveEventLoop;
@@ -24,8 +24,8 @@ use winit::{
 };
 
 const FPS_CAP: u32 = 60;
-const CANVAS_WIDTH: u32 = 90;
-const CANVAS_HEIGHT: u32 = 45;
+const CANVAS_WIDTH: u32 = 16*6;
+const CANVAS_HEIGHT: u32 = 9*6;
 const PHYSICS_TIMESTEP: f32 = 0.01;
 const SLEEP_BETWEEN_FRAMES: bool = false;
 
@@ -48,7 +48,14 @@ impl State {
             canvas: None,
             renderer: Renderer::new(CANVAS_WIDTH, CANVAS_HEIGHT),
             controls: ControllerSettings::init(),
-            camera: Camera::new(CANVAS_WIDTH, CANVAS_HEIGHT, Point3::new(-1.0, 0.0, 1.0), 90.0, 0.0, 90.0),
+            camera: Camera::new(
+                Point3::new(-1.0, 0.0, 1.0),
+                90.0,
+                0.0,
+                80.0,
+                CANVAS_WIDTH,
+                CANVAS_HEIGHT,
+            ),
 
             delta_accumulator: 0.0,
             time_per_frame: Duration::from_secs_f64(1.0 / FPS_CAP as f64),
@@ -67,10 +74,15 @@ impl State {
         }
     }
 
-    fn process_window_input(&mut self, input: GameInput, is_pressed: bool, event_loop: &ActiveEventLoop) {
+    fn process_window_input(
+        &mut self,
+        input: GameInput,
+        is_pressed: bool,
+        event_loop: &ActiveEventLoop,
+    ) {
         match input {
             GameInput::QuitGame if is_pressed => event_loop.exit(),
-            _ => ()
+            _ => (),
         }
     }
 }
@@ -153,7 +165,8 @@ impl ApplicationHandler for State {
 
     fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
         if let DeviceEvent::MouseMotion { delta } = event {
-            self.camera.process_mouse_motion(delta.0 as f32, delta.1 as f32)
+            self.camera
+                .process_mouse_motion(delta.0 as f32, delta.1 as f32)
         }
     }
 
