@@ -1,15 +1,18 @@
 mod backend;
 mod control;
 mod renderer;
+mod shape;
 
 use std::time::{Duration, Instant};
 
 use backend::ctx::Ctx;
 use backend::Canvas;
+use bvh::bounding_hierarchy::BoundingHierarchy;
 use control::{ControllerSettings, GameInput};
-use nalgebra::{Vector2, Vector3};
+use nalgebra::{Point3, Vector2, Vector3};
 use pollster::block_on;
 use renderer::{Camera, Renderer};
+use shape::Object;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, StartCause};
 use winit::event_loop::ActiveEventLoop;
@@ -45,7 +48,7 @@ impl State {
             canvas: None,
             renderer: Renderer::new(CANVAS_WIDTH, CANVAS_HEIGHT),
             controls: ControllerSettings::init(),
-            camera: Camera::new(CANVAS_WIDTH, CANVAS_HEIGHT, Vector3::zeros(), 90.0, 0.0, 90.0),
+            camera: Camera::new(CANVAS_WIDTH, CANVAS_HEIGHT, Point3::origin(), 90.0, 0.0, 90.0),
 
             delta_accumulator: 0.0,
             time_per_frame: Duration::from_secs_f64(1.0 / FPS_CAP as f64),
