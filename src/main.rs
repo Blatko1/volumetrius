@@ -2,7 +2,7 @@ mod backend;
 mod camera;
 mod control;
 mod renderer;
-mod shape;
+mod object;
 
 use std::time::{Duration, Instant};
 

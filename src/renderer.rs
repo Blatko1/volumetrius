@@ -1,4 +1,4 @@
-use crate::{camera::Camera, shape::Object};
+use crate::{camera::Camera, object::Object};
 use bvh::{bvh::Bvh, ray::Ray};
 use nalgebra::Point3;
 
@@ -69,17 +69,22 @@ impl Renderer {
 
         let ray = Ray::new(camera.origin, ray_direction);
         let hits = self.world.traverse(&ray);
-        if let Some(hit) = hits.first() {
-            if hit.node_index == 1 {
-                pixel[0] = 255;
-                pixel[1] = 0;
-            } else {
-                pixel[0] = 125;
-                pixel[1] = 10;
-            }
-        } else {
+        if hits.is_empty() {
             pixel[0] = 0;
             pixel[1] = 255;
+        } else {
+            for hit in hits.iter() {
+                if hit.node_index == 1 {
+                    pixel[0] = 255;
+                    pixel[1] = 0;
+                } else {
+                    pixel[0] = 125;
+                    pixel[1] = 10;
+                }
+            }
+            if hits.len() >= 2 {
+                println!("hit: {:?}", hits)
+            }
         }
     }
 }

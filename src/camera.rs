@@ -7,6 +7,9 @@ use crate::control::GameInput;
 const PITCH_CAP: f32 = PI / 2.0 - f32::EPSILON;
 const FOV_MIN: f32 = PI / 15.0;
 const FOV_MAX: f32 = PI * 2.0 / 3.0;
+const WALK_SPEED: f32 = 6.0;
+const FLY_SPEED: f32 = 5.0;
+const MOUSE_SPEED: f32 = 0.0035;
 
 // TODO make pub(super) or remove pub
 #[derive(Debug, Default)]
@@ -78,10 +81,10 @@ impl Camera {
         let (horizontal_walk, vertical_walk) = (local_walk_dir.x, local_walk_dir.z);
         let forward_dir = Vector3::new(-self.plane_horizontal.z, 0.0, self.plane_horizontal.x);
         let global_walk_dir = vertical_walk * forward_dir + horizontal_walk * self.plane_horizontal;
-        self.origin.x += global_walk_dir.x * 3.0 * delta;
-        self.origin.z += global_walk_dir.z * 3.0 * delta;
+        self.origin.x += global_walk_dir.x * WALK_SPEED * delta;
+        self.origin.z += global_walk_dir.z * WALK_SPEED * delta;
         let fly_dir = self.input_state.fly_dir();
-        self.origin.y += fly_dir * 3.0 * delta;
+        self.origin.y += fly_dir * FLY_SPEED * delta;
 
         // Have a special function for this 
         let delta_fov = (self.input_state.fov_change() * 5.0).to_radians();
@@ -104,7 +107,7 @@ impl Camera {
     }
 
     pub fn process_mouse_motion(&mut self, delta_x: f32, delta_y: f32) {
-        self.rotate(-delta_x * 0.01, -delta_y * 0.01)
+        self.rotate(-delta_x * MOUSE_SPEED, -delta_y * MOUSE_SPEED)
     }
 }
 

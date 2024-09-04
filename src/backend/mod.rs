@@ -190,10 +190,6 @@ impl Canvas {
         &mut self.frame
     }
 
-    pub fn frame(&self) -> &[u8] {
-        &self.frame
-    }
-
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         self.ctx.queue().write_texture(
             wgpu::ImageCopyTexture {
@@ -253,6 +249,8 @@ impl Canvas {
                 self.region.height,
             );
             rpass.draw(0..3, 0..1);
+
+
         }
 
         self.ctx.queue().submit(Some(encoder.finish()));
