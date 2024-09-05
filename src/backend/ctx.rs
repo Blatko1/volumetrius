@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop, window::Window};
+use winit::{dpi::{LogicalSize, PhysicalSize}, event_loop::ActiveEventLoop, window::Window};
 
 pub struct Ctx {
     window: Arc<Window>,
@@ -20,6 +20,7 @@ impl Ctx {
                 )
                 .unwrap(),
         );
+        window.request_inner_size(LogicalSize::new(600, 350));
 
         let size = window.inner_size();
         let backends =

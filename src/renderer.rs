@@ -1,3 +1,5 @@
+use core::f32;
+
 use crate::{camera::Camera, object::Object};
 use bvh::{bvh::Bvh, ray::Ray};
 use nalgebra::Point3;
@@ -55,36 +57,54 @@ impl Renderer {
             .enumerate()
             .for_each(|(y, row)| {
                 row.chunks_exact_mut(4).enumerate().for_each(|(x, pixel)| {
-                    self.render_pixel(camera, x as f32, y as f32, pixel);
+                    self.render_pixel(camera, x, y, pixel);
                 })
             });
     }
 
-    pub fn render_pixel(&self, camera: &Camera, x: f32, y: f32, pixel: &mut [u8]) {
-        let plane_x = 2.0 * x / self.width as f32 - 1.0;
-        let plane_y = 2.0 * y / self.height as f32 - 1.0;
-        let ray_2d = plane_x * camera.plane_horizontal + plane_y * camera.plane_vertical;
+    pub fn render_pixel(&self, camera: &Camera, x: usize, y: usize, pixel: &mut [u8]) {
+        let plane_x = 2.0 * x as f32 / self.width as f32 - 1.0;
+        let plane_y = 2.0 * y as f32 / self.height as f32 - 1.0;
+        let ray_2d = plane_x * camera.plane_horizontal * camera.aspect_ratio + plane_y * camera.plane_vertical;
 
-        let ray_direction = ray_2d + camera.dir * camera.focal_distance;
+        let ray_direction = (ray_2d + camera.dir * camera.focal_distance).normalize();
 
-        let ray = Ray::new(camera.origin, ray_direction);
-        let hits = self.world.traverse(&ray);
-        if hits.is_empty() {
+        // Manually creating the Ray to save performance
+        let ray = Ray {
+            origin: camera.origin,
+            direction: ray_direction,
+            inv_direction: ray_direction.map(|x| x.recip()),
+        };
+        let hit_objects = self.world.traverse(&ray);
+        if hit_objects.is_empty() {
             pixel[0] = 0;
-            pixel[1] = 255;
-        } else {
-            for hit in hits.iter() {
-                if hit.node_index == 1 {
-                    pixel[0] = 255;
-                    pixel[1] = 0;
-                } else {
-                    pixel[0] = 125;
-                    pixel[1] = 10;
-                }
-            }
-            if hits.len() >= 2 {
-                println!("hit: {:?}", hits)
+            pixel[1] = 0;
+            pixel[2] = 255;
+            return;
+        }
+
+        let mut closest_object_idx = 0;
+        let mut min_distance = f32::INFINITY;
+        for (idx, object) in hit_objects.iter().enumerate() {
+            let distance = object.intersection_distance(camera.origin, ray_direction);
+            if distance < min_distance {
+                closest_object_idx = idx;
+                min_distance = distance;
             }
         }
+
+        let closest_object = hit_objects[closest_object_idx];
+        let intersection_point = camera.origin + ray_direction * min_distance;
+        let local_intersection_point = intersection_point - closest_object.min;
+        if x as u32 == self.width / 2 && y as u32 == self.height / 2 {
+            println!("dist: {}", min_distance);
+            println!("local: {}", local_intersection_point);
+        }
+        let color = closest_object.traverse(intersection_point, ray_direction);
+
+            pixel[0] = color.r;
+            pixel[1] = color.g;
+            pixel[2] = color.b;
+        
     }
 }
