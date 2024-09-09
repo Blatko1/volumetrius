@@ -12,16 +12,16 @@ pub struct World {
 impl World {
     pub fn new() -> Self {
         let object = Object::new(
-            5,
-            5,
-            5,
+            20,
+            20,
+            20,
             Point3::new(5.0, 5.0, 5.0),
             Point3::new(10.0, 10.0, 10.0),
         );
         let object2 = Object::new(
-            5,
-            5,
-            5,
+            20,
+            20,
+            20,
             Point3::new(-10.0, -10.0, -10.0),
             Point3::new(-5.0, -5.0, -5.0),
         );
@@ -83,6 +83,7 @@ impl Renderer {
             return;
         }
 
+        // Find the closest hit object
         let mut closest_object_idx = 0;
         let mut min_distance = f32::INFINITY;
         for (idx, object) in hit_objects.iter().enumerate() {
@@ -97,14 +98,18 @@ impl Renderer {
         let intersection_point = camera.origin + ray_direction * min_distance;
         let local_intersection_point = intersection_point - closest_object.min;
         if x as u32 == self.width / 2 && y as u32 == self.height / 2 {
-            println!("dist: {}", min_distance);
+            //println!("dist: {}", min_distance);
             println!("local: {}", local_intersection_point);
         }
-        let color = closest_object.traverse(intersection_point, ray_direction);
-
+        if let Some(color) = closest_object.traverse(intersection_point, ray_direction) {
             pixel[0] = color.r;
             pixel[1] = color.g;
             pixel[2] = color.b;
+        } else {
+            pixel[0] = 255;
+            pixel[1] = 255;
+            pixel[2] = 255;
+        }
         
     }
 }

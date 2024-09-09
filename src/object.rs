@@ -1,8 +1,10 @@
+use core::f32;
+
 use bvh::{
     aabb::{Aabb, Bounded},
     bounding_hierarchy::BHShape,
 };
-use dot_vox::{Color, Model};
+use dot_vox::{Color, Model, Voxel};
 use nalgebra::{Point3, Vector3};
 
 // TODO remove unnecessary pub
@@ -29,13 +31,16 @@ impl Object {
     ) -> Self {
         let dot_vox = match dot_vox::load("res/knight.vox") {
             Ok(vox_data) => vox_data,
-            Err(_) => panic!()
+            Err(_) => panic!(),
         };
         Self {
             width,
             height,
             depth,
-            data: ModelData::from_vox_model(dot_vox.models.into_iter().next().unwrap(), dot_vox.palette),
+            data: ModelData::from_vox_model(
+                dot_vox.models.into_iter().next().unwrap(),
+                dot_vox.palette,
+            ),
 
             min,
             max,
@@ -60,33 +65,87 @@ impl Object {
         t1.min(t2).max(t3.min(t4)).max(t5.min(t6))
     }
 
-    pub fn traverse(&self, intersection: Point3<f32>, ray_direction: Vector3<f32>) -> Color {
-        let local_intersection = intersection - self.min;
-        let delta_dist = Vector3::new(ray_direction.x.recip(), ray_direction.y.recip(), ray_direction.z.recip());
-        /*let mut side_dist_x = delta_dist.x
-                * if ray_dir.x < 0.0 {
-                    intersection.x.fract()
+    pub fn traverse(&self, intersection: Point3<f32>, ray_direction: Vector3<f32>) -> Option<Color> {
+        let mut local_intersection = intersection - self.min;
+
+        let delta_dist = Vector3::new(
+            ray_direction.x.recip().abs(),
+            ray_direction.y.recip().abs(),
+            ray_direction.z.recip().abs(),
+        );
+
+        if local_intersection.x as usize == self.width {
+            local_intersection.x -= 0.000001;
+        } else if local_intersection.y as usize == self.height {
+            local_intersection.y -= 0.000001;
+        } else if local_intersection.z as usize == self.depth {
+            local_intersection.z -= 0.000001;
+        }
+
+        let mut grid_x = local_intersection.x as i32;
+        let mut grid_y = local_intersection.y as i32;
+        let mut grid_z = local_intersection.z as i32;
+        let (step_x, step_y, step_z) = (
+            ray_direction.x.signum() as i32,
+            ray_direction.y.signum() as i32,
+            ray_direction.z.signum() as i32,
+        );
+        let mut side_dist_x = delta_dist.x
+            * if ray_direction.x < 0.0 {
+                local_intersection.x.fract()
+            } else {
+                1.0 - local_intersection.x.fract()
+            };
+        let mut side_dist_y = delta_dist.y
+            * if ray_direction.y < 0.0 {
+                local_intersection.y.fract()
+            } else {
+                1.0 - local_intersection.y.fract()
+            };
+        let mut side_dist_z = delta_dist.z
+            * if ray_direction.z < 0.0 {
+                local_intersection.z.fract()
+            } else {
+                1.0 - local_intersection.z.fract()
+            };
+
+        loop {
+            if side_dist_x < side_dist_y {
+                if side_dist_x < side_dist_z {
+                    grid_x += step_x;
+                    if grid_x < 0 || grid_x >= self.width as i32 {
+                        break;
+                    }
+                    side_dist_x += delta_dist.x;
                 } else {
-                    1.0 - intersection.x.fract()
-                };
-            let mut side_dist_y = delta_dist.y
-                * if ray_dir.y < 0.0 {
-                    (intersection.y - obj_pos.y).fract()
-                } else {
-                    1.0 - (intersection.y - obj_pos.y).fract()
-                };
-            let mut side_dist_z = delta_dist.z
-                * if ray_dir.z < 0.0 {
-                    intersection.z.fract()
-                } else {
-                    1.0 - intersection.z.fract()
-                };*/
-                Color {
-                    r: (local_intersection.x / self.width as f32 * 255.0) as u8,
-                    g: (local_intersection.y / self.height as f32 * 255.0) as u8,
-                    b: (local_intersection.z / self.depth as f32 * 255.0) as u8,
-                    a: 255,
+                    grid_z += step_z;
+                    if grid_z < 0 || grid_z >= self.depth as i32 {
+                        break;
+                    }
+                    side_dist_z += delta_dist.z;
                 }
+            } else if side_dist_y < side_dist_z {
+                grid_y += step_y;
+                if grid_y < 0 || grid_y >= self.height as i32 {
+                    break;
+                }
+                side_dist_y += delta_dist.y;
+            } else {
+                grid_z += step_z;
+                if grid_z < 0 || grid_z >= self.depth as i32 {
+                    break;
+                }
+                side_dist_z += delta_dist.z;
+            }
+
+            if let Some(vox) = self.data.get_voxel(grid_x as u32, grid_y as u32, grid_z as u32) {
+                if vox.a == 255 {
+                    return Some(vox);
+                }
+                
+            }
+        }
+        None
     }
 }
 
@@ -115,34 +174,35 @@ const BLANK: Color = Color {
 
 #[derive(Debug)]
 pub struct ModelData {
-    dimension: u32,
+    dx: u32,
+    dy: u32,
+    dz: u32,
     voxels: Vec<Color>,
+    //palette: Vec<Color>
 }
 
 impl ModelData {
     pub fn from_vox_model(model: Model, palette: Vec<Color>) -> Self {
-        assert!(
-            model.size.x == model.size.y
-                && model.size.y == model.size.z
-                && model.size.x == model.size.z,
-            "Dimensions of a voxel not equal!!!"
-        );
-        let dimension = model.size.x;
-        let mut voxels = vec![BLANK; (dimension * dimension * dimension) as usize];
+        let dx = model.size.x;
+        let dz = model.size.y;
+        let dy = model.size.z;
+        println!("dx: {} {} {}", dx, dy, dz);
+        let mut voxels = vec![BLANK; (dx * dy * dz) as usize];
         model.voxels.iter().for_each(|v| {
             // Replace y and z since vox models have z axis pointing up
-            let index = position_to_index(dimension, v.x as u32, v.z as u32, v.y as u32);
+            let index = (v.x as u32 + v.y as u32 * dz + v.z as u32 * dy * dy) as usize;
             voxels[index] = palette[v.i as usize];
         });
-
         Self {
-            dimension: model.size.x,
+            dx,
+            dy,
+            dz,
             voxels,
         }
     }
-}
 
-// TODO Change input to usize or something
-fn position_to_index(dimension: u32, x: u32, y: u32, z: u32) -> usize {
-    (x + z * dimension + y * dimension * dimension) as usize
+    pub fn get_voxel(&self, x: u32, y: u32, z: u32) -> Option<Color> {
+        let index = (x + z * self.dz + y * self.dy * self.dy) as usize;
+        self.voxels.get(index).copied()
+    }
 }
