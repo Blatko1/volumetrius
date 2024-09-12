@@ -64,5 +64,5 @@ pub enum GameInput {
     IncreaseFOV,
     DecreaseFOV,
     PhysicsSwitch,
-    QuitGame
+    QuitGame,
 }

@@ -1,8 +1,11 @@
 use core::f32;
 
-use crate::{camera::Camera, object::{ModelType, Object}};
+use crate::{
+    camera::Camera,
+    object::{ModelType, Object},
+};
 use bvh::{bvh::Bvh, ray::Ray};
-use nalgebra::Point3;
+use nalgebra::{Point3, Vector3};
 
 pub struct World {
     objects: Vec<Object>,
@@ -11,23 +14,34 @@ pub struct World {
 
 impl World {
     pub fn new() -> Self {
-        let object = Object::new(
-            ModelType::Knight,
-            Point3::new(5.0, 5.0, 5.0),
-            1.0
-        );
-        let object2 = Object::new(
-            ModelType::Knight,
-            Point3::new(-10.0, -10.0, -10.0),
-            0.1
-        );
-        let mut objects: Vec<Object> = vec![object, object2];
+        let object1 = Object::new(ModelType::Monu, Point3::new(-20.0, -50.0, 5.0), 1.0);
+        let object2 = Object::new(ModelType::Knight, Point3::new(-10.0, -10.0, -10.0), 0.1);
+        let object3 = Object::new(ModelType::Knight, Point3::new(25.0, -10.0, -20.0), 2.0);
+        let object4 = Object::new(ModelType::Knight, Point3::new(0.0, -10.0, -20.0), 0.4);
+        let object5 = Object::new(ModelType::Knight, Point3::new(-20.0, -10.0, -20.0), 0.7);
+        let mut objects: Vec<Object> = vec![object1, object2, object3, object4, object5];
         let bvh = Bvh::build(&mut objects);
         Self { objects, bvh }
     }
 
-    pub fn traverse(&self, ray: &Ray<f32, 3>) -> Vec<&Object> {
-        self.bvh.traverse(ray, self.objects.as_slice())
+    pub fn traverse_bvh_and_sort(
+        &self,
+        origin: Point3<f32>,
+        normalized_direction: Vector3<f32>,
+    ) -> Vec<(&Object, f32)> {
+        // Manually creating the Ray to preserve performance
+        let ray = Ray {
+            origin,
+            direction: normalized_direction,
+            inv_direction: normalized_direction.map(|x| x.recip()),
+        };
+        let hit_objects = self.bvh.traverse(&ray, self.objects.as_slice());
+        let mut objects_with_distance: Vec<_> = hit_objects
+            .into_iter()
+            .map(|obj| (obj, obj.intersection_distance(origin, normalized_direction)))
+            .collect();
+        objects_with_distance.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        objects_with_distance
     }
 }
 
@@ -61,53 +75,34 @@ impl Renderer {
     pub fn render_pixel(&self, camera: &Camera, x: usize, y: usize, pixel: &mut [u8]) {
         let plane_x = 2.0 * x as f32 / self.width as f32 - 1.0;
         let plane_y = 2.0 * y as f32 / self.height as f32 - 1.0;
-        let ray_2d = plane_x * camera.plane_horizontal * camera.aspect_ratio + plane_y * camera.plane_vertical;
+        let ray_2d = plane_x * camera.plane_horizontal * camera.aspect_ratio
+            + plane_y * camera.plane_vertical;
 
         let ray_direction = (ray_2d + camera.dir * camera.focal_distance).normalize();
 
-        // Manually creating the Ray to save performance
-        let ray = Ray {
-            origin: camera.origin,
-            direction: ray_direction,
-            inv_direction: ray_direction.map(|x| x.recip()),
-        };
-        let hit_objects = self.world.traverse(&ray);
-        if hit_objects.is_empty() {
-            pixel[0] = 0;
-            pixel[1] = 0;
-            pixel[2] = 255;
-            return;
-        }
+        let objects = self
+            .world
+            .traverse_bvh_and_sort(camera.origin, ray_direction);
 
-        // Find the closest hit object
-        let mut closest_object_idx = 0;
-        let mut min_distance = f32::INFINITY;
-        for (idx, object) in hit_objects.iter().enumerate() {
-            let distance = object.intersection_distance(camera.origin, ray_direction);
-            if distance < min_distance {
-                closest_object_idx = idx;
-                min_distance = distance;
-            }
+        let mut no_hit = true;
+        // From closest object to furthest
+        for (object, distance) in objects {
+            if let Some(color) = object.traverse(camera.origin, ray_direction, distance) {
+                pixel[0] = color.r;
+                pixel[1] = color.g;
+                pixel[2] = color.b;
+                no_hit = false;
+                break;
+            } /* else {
+                  pixel[0] = 255;
+                  pixel[1] = 255;
+                  pixel[2] = 255;
+              }*/
         }
-
-        let closest_object = hit_objects[closest_object_idx];
-        let bb_ray_intersection_point = camera.origin + ray_direction * min_distance;
-
-        if let Some(color) = closest_object.traverse(x, y, bb_ray_intersection_point, ray_direction) {
-            pixel[0] = color.r;
-            pixel[1] = color.g;
-            pixel[2] = color.b;
-        } else {
-            pixel[0] = 255;
-            pixel[1] = 255;
-            pixel[2] = 255;
+        if no_hit {
+            pixel[0] = 26;
+            pixel[1] = 51;
+            pixel[2] = 150;
         }
-
-        if x == 16*3 && y == 9*3 {
-            pixel[0] = 0;
-            pixel[1] = 0;
-            pixel[2] = 0;
-        }
-        
     }
 }

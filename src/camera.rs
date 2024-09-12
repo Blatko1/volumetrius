@@ -86,7 +86,7 @@ impl Camera {
         let fly_dir = self.input_state.fly_dir();
         self.origin.y += fly_dir * FLY_SPEED * delta;
 
-        // Have a special function for this 
+        // Have a special function for this
         let delta_fov = (self.input_state.fov_change() * 5.0).to_radians();
         self.fov = (self.fov - delta_fov).clamp(FOV_MIN, FOV_MAX);
         self.focal_distance = 0.5 / (self.fov * 0.5).tan();
@@ -133,10 +133,10 @@ impl CameraInputState {
             .unwrap_or_default()
     }
     pub fn fly_dir(&self) -> f32 {
-        return if self.fly_up { 1.0 } else { 0.0 } - if self.fly_down { 1.0 } else { 0.0 };
+        (if self.fly_up { 1.0 } else { 0.0 } - if self.fly_down { 1.0 } else { 0.0 })
     }
     pub fn fov_change(&self) -> f32 {
-        return if self.increase_fov { 1.0 } else { 0.0 } - if self.decrease_fov { 1.0 } else { 0.0 };
+        (if self.increase_fov { 1.0 } else { 0.0 } - if self.decrease_fov { 1.0 } else { 0.0 })
     }
 }
 

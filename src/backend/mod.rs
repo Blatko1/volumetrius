@@ -35,7 +35,6 @@ impl Canvas {
         let device = ctx.device();
         let render_format = ctx.config().format;
 
-
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Canvas Texture Sampler"),
             lod_min_clamp: 0.0,
@@ -249,8 +248,6 @@ impl Canvas {
                 self.region.height,
             );
             rpass.draw(0..3, 0..1);
-
-
         }
 
         self.ctx.queue().submit(Some(encoder.finish()));

@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use winit::{dpi::{LogicalSize, PhysicalSize}, event_loop::ActiveEventLoop, window::Window};
+use winit::{
+    dpi::{LogicalSize, PhysicalSize},
+    event_loop::ActiveEventLoop,
+    window::Window,
+};
 
 pub struct Ctx {
     window: Arc<Window>,
@@ -14,17 +18,13 @@ impl Ctx {
     pub async fn new(event_loop: &ActiveEventLoop) -> Result<Self, Box<dyn std::error::Error>> {
         let window = Arc::new(
             event_loop
-                .create_window(
-                    Window::default_attributes()
-                        .with_title("RayVenture"),
-                )
+                .create_window(Window::default_attributes().with_title("RayVenture"))
                 .unwrap(),
         );
-        window.request_inner_size(LogicalSize::new(600, 350));
+        let _ = window.request_inner_size(LogicalSize::new(600, 350));
 
         let size = window.inner_size();
-        let backends =
-            wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::PRIMARY);
+        let backends = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::PRIMARY);
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends,
             dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
@@ -47,8 +47,7 @@ impl Ctx {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Request Device"),
-                    required_features:
-                        wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                    required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                     required_limits: wgpu::Limits::default(),
                 },
                 None,
@@ -91,9 +90,7 @@ impl Ctx {
     }
 
     #[inline]
-    pub fn get_current_texture(
-        &self,
-    ) -> Result<wgpu::SurfaceTexture, wgpu::SurfaceError> {
+    pub fn get_current_texture(&self) -> Result<wgpu::SurfaceTexture, wgpu::SurfaceError> {
         self.surface.get_current_texture()
     }
 
