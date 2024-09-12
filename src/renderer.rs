@@ -1,6 +1,6 @@
 use core::f32;
 
-use crate::{camera::Camera, object::Object};
+use crate::{camera::Camera, object::{ModelType, Object}};
 use bvh::{bvh::Bvh, ray::Ray};
 use nalgebra::Point3;
 
@@ -12,18 +12,14 @@ pub struct World {
 impl World {
     pub fn new() -> Self {
         let object = Object::new(
-            20,
-            20,
-            20,
+            ModelType::Knight,
             Point3::new(5.0, 5.0, 5.0),
-            Point3::new(10.0, 10.0, 10.0),
+            1.0
         );
         let object2 = Object::new(
-            20,
-            20,
-            20,
+            ModelType::Knight,
             Point3::new(-10.0, -10.0, -10.0),
-            Point3::new(-5.0, -5.0, -5.0),
+            0.1
         );
         let mut objects: Vec<Object> = vec![object, object2];
         let bvh = Bvh::build(&mut objects);
@@ -95,13 +91,9 @@ impl Renderer {
         }
 
         let closest_object = hit_objects[closest_object_idx];
-        let intersection_point = camera.origin + ray_direction * min_distance;
-        let local_intersection_point = intersection_point - closest_object.min;
-        if x as u32 == self.width / 2 && y as u32 == self.height / 2 {
-            //println!("dist: {}", min_distance);
-            println!("local: {}", local_intersection_point);
-        }
-        if let Some(color) = closest_object.traverse(intersection_point, ray_direction) {
+        let bb_ray_intersection_point = camera.origin + ray_direction * min_distance;
+
+        if let Some(color) = closest_object.traverse(x, y, bb_ray_intersection_point, ray_direction) {
             pixel[0] = color.r;
             pixel[1] = color.g;
             pixel[2] = color.b;
@@ -109,6 +101,12 @@ impl Renderer {
             pixel[0] = 255;
             pixel[1] = 255;
             pixel[2] = 255;
+        }
+
+        if x == 16*3 && y == 9*3 {
+            pixel[0] = 0;
+            pixel[1] = 0;
+            pixel[2] = 0;
         }
         
     }
