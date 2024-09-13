@@ -49,7 +49,7 @@ impl State {
             renderer: Renderer::new(CANVAS_WIDTH, CANVAS_HEIGHT),
             controls: ControllerSettings::init(),
             camera: Camera::new(
-                Point3::new(0.0, 0.0, 0.0),
+                Point3::new(0.0, 0.0, 1.0),
                 -90.0,
                 0.0,
                 90.0,

@@ -70,7 +70,7 @@ impl Camera {
     pub fn update(&mut self, delta: f32) {
         let local_walk_dir = self.input_state.walk_dir();
         let (horizontal_walk, vertical_walk) = (local_walk_dir.x, local_walk_dir.z);
-        let forward_dir = Vector3::new(-self.plane_horizontal.z, 0.0, self.plane_horizontal.x);
+        let forward_dir = Vector3::new(self.plane_horizontal.z, 0.0, -self.plane_horizontal.x);
         let global_walk_dir = vertical_walk * forward_dir + horizontal_walk * self.plane_horizontal;
         self.origin.x += global_walk_dir.x * WALK_SPEED * delta;
         self.origin.z += global_walk_dir.z * WALK_SPEED * delta;
@@ -107,8 +107,8 @@ impl Camera {
         self.dir.x = yaw_cos * pitch_cos;
         self.dir.y = pitch_sin;
         self.dir.z = yaw_sin * pitch_cos;
-        self.plane_horizontal = Vector3::new(yaw_sin, 0.0, -yaw_cos);
-        self.plane_vertical = self.dir.cross(&self.plane_horizontal);
+        self.plane_horizontal = Vector3::new(-yaw_sin, 0.0, yaw_cos);
+        self.plane_vertical = self.plane_horizontal.cross(&self.dir);
     }
 
     pub fn process_input(&mut self, input: GameInput, is_pressed: bool) {
@@ -126,7 +126,7 @@ impl Camera {
     }
 
     pub fn process_mouse_motion(&mut self, delta_x: f32, delta_y: f32) {
-        self.rotate(-delta_x * MOUSE_SPEED, -delta_y * MOUSE_SPEED)
+        self.rotate(delta_x * MOUSE_SPEED, -delta_y * MOUSE_SPEED)
     }
 }
 

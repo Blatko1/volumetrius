@@ -15,7 +15,7 @@ pub struct World {
 impl World {
     pub fn new() -> Self {
         let object1 = Object::new(ModelType::Monu, Point3::new(-20.0, -50.0, 5.0), 1.0);
-        let object2 = Object::new(ModelType::Knight, Point3::new(-10.0, -10.0, -10.0), 0.1);
+        let object2 = Object::new(ModelType::Knight, Point3::new(-15.0, -10.0, -10.0), 0.1);
         let object3 = Object::new(ModelType::Knight, Point3::new(25.0, -10.0, -20.0), 2.0);
         let object4 = Object::new(ModelType::Knight, Point3::new(0.0, -10.0, -20.0), 0.4);
         let object5 = Object::new(ModelType::Knight, Point3::new(-20.0, -10.0, -20.0), 0.7);
