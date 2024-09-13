@@ -1,7 +1,10 @@
 pub mod ctx;
 
+use nalgebra::{Matrix4, Vector3};
 use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalSize;
+
+use crate::object::Object;
 
 use self::ctx::Ctx;
 
@@ -20,6 +23,13 @@ pub struct Canvas {
     ctx: Ctx,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
+
+    dbg_pipeline: wgpu::RenderPipeline,
+    dbg_bind_group: wgpu::BindGroup,
+    dbg_matrix_buffer: wgpu::Buffer,
+    dbg_vertex_buffer: wgpu::Buffer,
+    dbg_index_buffer: wgpu::Buffer,
+    dbg_indices_count: u32,
 
     region: ScissorRegion,
     vertex_buffer: wgpu::Buffer,
@@ -153,7 +163,94 @@ impl Canvas {
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: render_format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            depth_stencil: None,
+            multiview: None,
+        });
+
+
+
+        let dbg_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("DBG Vertex Buffer"),
+            contents: &[],
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let dbg_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("DBG Index Buffer"),
+            contents: &[],
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let dbg_matrix_buffer_size = std::mem::size_of::<[[f32; 4]; 4]>() as wgpu::BufferAddress;
+        let dbg_matrix_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("DBG Matrix Uniform Buffer"),
+            size: dbg_matrix_buffer_size,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let dbg_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("DBG Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: std::num::NonZeroU64::new(dbg_matrix_buffer_size),
+                    },
+                    count: None,
+                }],
+            });
+
+        let dbg_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("DBG Bind Group"),
+            layout: &dbg_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: dbg_matrix_buffer.as_entire_binding(),
+            }],
+        });
+
+        let dbg_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("DBG Render Pipeline Layout"),
+            bind_group_layouts: &[&dbg_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let dbg_shader: wgpu::ShaderModule =
+            device.create_shader_module(wgpu::include_wgsl!("../shaders/dbg_shader.wgsl"));
+
+        let dbg_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("DBG Render Pipeline"),
+            layout: Some(&dbg_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &dbg_shader,
+                entry_point: "vs_main",
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x3],
+                }],
+                compilation_options: Default::default(),
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineList,
+                polygon_mode: wgpu::PolygonMode::Line,
+                ..Default::default()
+            },
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &dbg_shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: render_format,
+                    blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: Default::default(),
@@ -173,6 +270,13 @@ impl Canvas {
             ctx,
             pipeline,
             bind_group,
+
+            dbg_pipeline,
+            dbg_bind_group,
+            dbg_matrix_buffer,
+            dbg_vertex_buffer,
+            dbg_index_buffer,
+            dbg_indices_count: 0,
 
             region: ScissorRegion::default(),
             vertex_buffer,
@@ -248,6 +352,12 @@ impl Canvas {
                 self.region.height,
             );
             rpass.draw(0..3, 0..1);
+
+            rpass.set_pipeline(&self.dbg_pipeline);
+            rpass.set_bind_group(0, &self.dbg_bind_group, &[]);
+            rpass.set_vertex_buffer(0, self.dbg_vertex_buffer.slice(..));
+            rpass.set_index_buffer(self.dbg_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            rpass.draw_indexed(0..self.dbg_indices_count as u32, 0, 0..1);
         }
 
         self.ctx.queue().submit(Some(encoder.finish()));
@@ -257,6 +367,46 @@ impl Canvas {
         frame.present();
 
         Ok(())
+    }
+
+    pub fn update_dbg_matrix(&self, matrix: Matrix4<f32>) {
+        self.ctx.queue().write_buffer
+        (&self.dbg_matrix_buffer, 0, bytemuck::cast_slice(matrix.as_slice()));
+    }
+
+    pub fn update_dbg_vertices(&mut self, objects: &[Object]) {
+        let mut vertices = Vec::with_capacity(objects.len() * 8);
+        let mut indices = Vec::with_capacity(objects.len() * 32);
+        for object in objects {
+            let i = vertices.len() as u16;
+            let p = object.bb_min;
+            let width = object.bb_width;
+            let height = object.bb_height;
+            let depth = object.bb_depth;
+            vertices.push([p.x, p.y, p.z]);
+            vertices.push([p.x + width, p.y, p.z]);
+            vertices.push([p.x, p.y, p.z + depth]);
+            vertices.push([p.x + width, p.y, p.z + depth]);
+
+            vertices.push([p.x, p.y + height, p.z]);
+            vertices.push([p.x + width, p.y + height, p.z]);
+            vertices.push([p.x, p.y + height, p.z + depth]);
+            vertices.push([p.x + width, p.y + height, p.z + depth]);
+
+            indices.append(&mut vec![i, i+1, i, i+2, i, i+3, i, i+4, i+1, i+4, i+2, i+4])
+        }
+        //println!("vertices: {:?}, indeices: {:?}", vertices, indices);
+        self.dbg_vertex_buffer = self.ctx.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("DBG Vertex Buffer"),
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+        self.dbg_index_buffer = self.ctx.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("DBG Index Buffer"),
+            contents: bytemuck::cast_slice(&indices),
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+        });
+        self.dbg_indices_count = indices.len() as u32;
     }
 
     pub fn set_window_title(&self, title: &str) {

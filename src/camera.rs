@@ -1,6 +1,6 @@
 use std::f32::consts::{PI, TAU};
 
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Matrix4, Point3, Vector3};
 
 use crate::control::GameInput;
 
@@ -15,7 +15,9 @@ const MOUSE_SPEED: f32 = 0.0035;
 #[derive(Debug, Default)]
 pub struct Camera {
     pub origin: Point3<f32>,
-
+    pub dir: Vector3<f32>,
+    pub plane_horizontal: Vector3<f32>,
+    pub plane_vertical: Vector3<f32>,
     pub yaw: f32,
     pub pitch: f32,
 
@@ -23,9 +25,9 @@ pub struct Camera {
     pub focal_distance: f32,
     pub aspect_ratio: f32,
 
-    pub dir: Vector3<f32>,
-    pub plane_horizontal: Vector3<f32>,
-    pub plane_vertical: Vector3<f32>,
+    // Only for GPU rendering stuff
+    near: f32,
+    far: f32,
 
     input_state: CameraInputState,
 }
@@ -39,41 +41,30 @@ impl Camera {
         plane_width: u32,
         plane_height: u32,
     ) -> Self {
-        let plane_width = plane_width as f32;
-        let plane_height = plane_height as f32;
-        let aspect_ratio = plane_width / plane_height;
+        let aspect_ratio = plane_width as f32 / plane_height as f32;
 
         let fov = fov_deg.to_radians();
         let mut camera = Self {
             origin,
-            yaw: yaw_deg.to_radians(),
-            pitch: pitch_deg.to_radians(),
-            fov,
-            focal_distance: 0.5 / (fov * 0.5).tan(),
-            aspect_ratio,
             dir: Vector3::zeros(),
             plane_horizontal: Vector3::zeros(),
             plane_vertical: Vector3::zeros(),
+            yaw: yaw_deg.to_radians(),
+            pitch: pitch_deg.to_radians(),
+            fov,
+
+            focal_distance: 0.5 / (fov * 0.5).tan(),
+            aspect_ratio,
+
+            near: 0.1,
+            far: 100.0,
+
             input_state: CameraInputState::default(),
         };
         // Initializes the direction and the plane
         camera.rotate(0.0, 0.0);
 
         camera
-    }
-
-    fn rotate(&mut self, yaw_delta_rad: f32, pitch_delta_rad: f32) {
-        self.yaw = normalize_rad(self.yaw + yaw_delta_rad);
-        self.pitch = (self.pitch + pitch_delta_rad).clamp(-PITCH_CAP, PITCH_CAP);
-        let yaw_sin = self.yaw.sin();
-        let yaw_cos = self.yaw.cos();
-        let pitch_cos = self.pitch.cos();
-        let pitch_sin = self.pitch.sin();
-        self.dir.x = yaw_cos * pitch_cos;
-        self.dir.y = pitch_sin;
-        self.dir.z = yaw_sin * pitch_cos;
-        self.plane_horizontal = Vector3::new(yaw_sin, 0.0, -yaw_cos);
-        self.plane_vertical = self.dir.cross(&self.plane_horizontal);
     }
 
     pub fn update(&mut self, delta: f32) {
@@ -87,9 +78,37 @@ impl Camera {
         self.origin.y += fly_dir * FLY_SPEED * delta;
 
         // Have a special function for this
-        let delta_fov = (self.input_state.fov_change() * 5.0).to_radians();
+        let delta_fov = (self.input_state.fov_change() * 2.0).to_radians();
         self.fov = (self.fov - delta_fov).clamp(FOV_MIN, FOV_MAX);
-        self.focal_distance = 0.5 / (self.fov * 0.5).tan();
+        self.focal_distance = 1.0 / (self.fov * 0.5).tan();
+    }
+
+    pub fn get_global_matrix(&mut self) -> Matrix4<f32> {
+        let target = Point3::new(
+            self.origin.x - self.dir.x,
+            self.origin.y - self.dir.y,
+            self.origin.z - self.dir.z,
+        );
+        let projection = Matrix4::new_perspective(
+            self.aspect_ratio,
+            self.fov,
+            self.near,
+            self.far,
+        );
+        let view = Matrix4::look_at_lh(&self.origin , &target, &self.plane_vertical);
+        projection * view
+    }
+
+    fn rotate(&mut self, yaw_delta_rad: f32, pitch_delta_rad: f32) {
+        self.yaw = normalize_rad(self.yaw + yaw_delta_rad);
+        self.pitch = (self.pitch + pitch_delta_rad).clamp(-PITCH_CAP, PITCH_CAP);
+        let (yaw_sin, yaw_cos) = self.yaw.sin_cos();
+        let (pitch_sin, pitch_cos) = self.pitch.sin_cos();
+        self.dir.x = yaw_cos * pitch_cos;
+        self.dir.y = pitch_sin;
+        self.dir.z = yaw_sin * pitch_cos;
+        self.plane_horizontal = Vector3::new(yaw_sin, 0.0, -yaw_cos);
+        self.plane_vertical = self.dir.cross(&self.plane_horizontal);
     }
 
     pub fn process_input(&mut self, input: GameInput, is_pressed: bool) {

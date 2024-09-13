@@ -24,8 +24,8 @@ use winit::{
 };
 
 const FPS_CAP: u32 = 60;
-const CANVAS_WIDTH: u32 = 16 * 120;
-const CANVAS_HEIGHT: u32 = 9 * 120;
+const CANVAS_WIDTH: u32 = 16 * 20;
+const CANVAS_HEIGHT: u32 = 9 * 20;
 const PHYSICS_TIMESTEP: f32 = 0.01;
 const SLEEP_BETWEEN_FRAMES: bool = false;
 
@@ -49,10 +49,10 @@ impl State {
             renderer: Renderer::new(CANVAS_WIDTH, CANVAS_HEIGHT),
             controls: ControllerSettings::init(),
             camera: Camera::new(
-                Point3::new(-1.0, 0.0, 1.0),
-                90.0,
+                Point3::new(0.0, 0.0, 0.0),
+                -90.0,
                 0.0,
-                70.0,
+                90.0,
                 CANVAS_WIDTH,
                 CANVAS_HEIGHT,
             ),
@@ -119,6 +119,8 @@ impl ApplicationHandler for State {
             WindowEvent::RedrawRequested => {
                 let canvas = self.canvas.as_mut().unwrap();
                 self.renderer.render(&self.camera, canvas.frame_mut());
+                canvas.update_dbg_matrix(self.camera.get_global_matrix());
+                canvas.update_dbg_vertices(self.renderer.world.objects());
 
                 match canvas.render() {
                     Ok(_) => (),

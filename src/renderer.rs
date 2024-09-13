@@ -43,10 +43,14 @@ impl World {
         objects_with_distance.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
         objects_with_distance
     }
+
+    pub fn objects(&self) -> &[Object] {
+        &self.objects
+    }
 }
 
 pub struct Renderer {
-    world: World,
+    pub world: World,
 
     width: u32,
     height: u32,

@@ -47,7 +47,8 @@ impl Ctx {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Request Device"),
-                    required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                    required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                        | wgpu::Features::POLYGON_MODE_LINE,
                     required_limits: wgpu::Limits::default(),
                 },
                 None,

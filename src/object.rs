@@ -12,9 +12,9 @@ use nalgebra::{Point3, Vector3};
 pub struct Object {
     pub bb_min: Point3<f32>,
     pub bb_max: Point3<f32>,
-    bb_width: f32,
-    bb_height: f32,
-    bb_depth: f32,
+    pub bb_width: f32,
+    pub bb_height: f32,
+    pub bb_depth: f32,
     model_data: ModelData,
 
     node_index: usize,
@@ -26,9 +26,7 @@ impl Object {
             ModelType::Knight => {
                 dot_vox::load("res/knight.vox").expect("Failed to load knight.vox")
             }
-            ModelType::Monu => {
-                dot_vox::load("res/monu.vox").expect("Failed to load monu.vox")
-            }
+            ModelType::Monu => dot_vox::load("res/monu.vox").expect("Failed to load monu.vox"),
         };
         let model_data =
             ModelData::from_vox_model(model.models.into_iter().next().unwrap(), model.palette);
@@ -94,10 +92,10 @@ impl Object {
             if model_intersection_x as u32 >= model_width {
                 model_intersection_x = model_width as f32 - 0.00001;
             }
-             if model_intersection_y as u32 >= model_height {
+            if model_intersection_y as u32 >= model_height {
                 model_intersection_y = model_height as f32 - 0.00001;
             }
-             if model_intersection_z as u32 >= model_depth {
+            if model_intersection_z as u32 >= model_depth {
                 model_intersection_z = model_depth as f32 - 0.00001;
             }
 
@@ -161,12 +159,23 @@ impl Object {
             };
 
         loop {
-            let Some(voxel) = self
-                .model_data
-                .get_voxel(grid_x as u32, grid_y as u32, grid_z as u32) else {
-                    println!("x: {}, y: {}, z: {}, dist: {} w: {}, h: {}, d: {}, intersection: {}", grid_x, grid_y, grid_z, distance, model_width, model_height, model_depth, local_intersection);
-                    panic!();
-                };
+            let Some(voxel) =
+                self.model_data
+                    .get_voxel(grid_x as u32, grid_y as u32, grid_z as u32)
+            else {
+                println!(
+                    "x: {}, y: {}, z: {}, dist: {} w: {}, h: {}, d: {}, intersection: {}",
+                    grid_x,
+                    grid_y,
+                    grid_z,
+                    distance,
+                    model_width,
+                    model_height,
+                    model_depth,
+                    local_intersection
+                );
+                panic!();
+            };
             if voxel.a == 255 {
                 let sunlight_direction = -Vector3::new(0.1, 0.2, 0.3).normalize();
                 let normal = voxel_side.get_normal();
@@ -278,7 +287,7 @@ impl ModelData {
 
 pub enum ModelType {
     Knight,
-    Monu
+    Monu,
 }
 
 #[derive(Debug, Clone, Copy)]
