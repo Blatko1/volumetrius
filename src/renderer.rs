@@ -2,7 +2,7 @@ use core::f32;
 
 use crate::{
     camera::Camera,
-    object::{ModelType, Object},
+    object::{ModelType, Object, VoxelFace},
 };
 use bvh::{bvh::Bvh, ray::Ray};
 use nalgebra::{Point3, Vector3};
@@ -28,7 +28,7 @@ impl World {
         &self,
         origin: Point3<f32>,
         normalized_direction: Vector3<f32>,
-    ) -> Vec<(&Object, f32)> {
+    ) -> Vec<(&Object, (f32, VoxelFace))> {
         // Manually creating the Ray to preserve performance
         let ray = Ray {
             origin,
@@ -38,9 +38,9 @@ impl World {
         let hit_objects = self.bvh.traverse(&ray, self.objects.as_slice());
         let mut objects_with_distance: Vec<_> = hit_objects
             .into_iter()
-            .map(|obj| (obj, obj.intersection_distance(origin, normalized_direction)))
+            .map(|obj| (obj, obj.get_intersection(origin, normalized_direction)))
             .collect();
-        objects_with_distance.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        objects_with_distance.sort_by(|(_, (a, _)), (_, (b, _))| a.partial_cmp(&b).unwrap());
         objects_with_distance
     }
 
@@ -90,18 +90,14 @@ impl Renderer {
 
         let mut no_hit = true;
         // From closest object to furthest
-        for (object, distance) in objects {
-            if let Some(color) = object.traverse(camera.origin, ray_direction, distance) {
+        for (object, (distance, hit_face)) in objects {
+            if let Some(color) = object.traverse(camera.origin, ray_direction, distance, hit_face) {
                 pixel[0] = color.r;
                 pixel[1] = color.g;
                 pixel[2] = color.b;
                 no_hit = false;
                 break;
-            } /* else {
-                  pixel[0] = 255;
-                  pixel[1] = 255;
-                  pixel[2] = 255;
-              }*/
+            }
         }
         if no_hit {
             pixel[0] = 26;

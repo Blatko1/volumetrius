@@ -9,3 +9,7 @@ So the steps are:
 * if not, continue normally,
 * if yes, first draw the closer object (bb) and remember the distance to pixel, then try to find pixel of second closest (bb) object and compare pixel distances, and so on
 * after all that, you end up with proper depth
+
+## TODO
+
+- [ ] Objects are able to rotate

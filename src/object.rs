@@ -48,7 +48,11 @@ impl Object {
         }
     }
 
-    pub fn intersection_distance(&self, origin: Point3<f32>, direction: Vector3<f32>) -> f32 {
+    pub fn get_intersection(
+        &self,
+        origin: Point3<f32>,
+        direction: Vector3<f32>,
+    ) -> (f32, VoxelFace) {
         let inv_dir_x = direction.x.recip();
         let inv_dir_y = direction.y.recip();
         let inv_dir_z = direction.z.recip();
@@ -59,8 +63,36 @@ impl Object {
         let t5 = (self.bb_min.z - origin.z) * inv_dir_z;
         let t6 = (self.bb_max.z - origin.z) * inv_dir_z;
 
-        // t-min
-        t1.min(t2).max(t3.min(t4)).max(t5.min(t6))
+        let min_t1_t2 = t1.min(t2);
+        let min_t3_t4 = t3.min(t4);
+        let t_min = min_t1_t2.max(min_t3_t4).max(t5.min(t6));
+
+        if t_min <= 0.0 {
+            return (t_min, VoxelFace::Inside);
+        }
+
+        // Determine which side was hit based on t_min
+        let hit_face = if t_min == min_t1_t2 {
+            if t_min == t1 {
+                VoxelFace::Left
+            } else {
+                VoxelFace::Right
+            }
+        } else if t_min == min_t3_t4 {
+            if t_min == t3 {
+                VoxelFace::Bottom
+            } else {
+                VoxelFace::Top
+            }
+        } else {
+            if t_min == t5 {
+                VoxelFace::Back
+            } else {
+                VoxelFace::Front
+            }
+        };
+
+        (t_min, hit_face)
     }
 
     pub fn traverse(
@@ -68,16 +100,20 @@ impl Object {
         origin: Point3<f32>,
         ray_direction: Vector3<f32>,
         distance: f32,
+        hit_face: VoxelFace,
     ) -> Option<Color> {
         let intersection = origin + ray_direction * distance.max(0.0);
         let local_intersection = intersection - self.bb_min;
-        let model_width = self.model_data.width;
-        let model_height = self.model_data.height;
-        let model_depth = self.model_data.depth;
+        let model_width = self.model_data.width as f32;
+        let model_height = self.model_data.height as f32;
+        let model_depth = self.model_data.depth as f32;
         // Scaled to dimensions of the model, the intersection point on the actual model
-        let mut model_intersection_x = local_intersection.x / self.bb_width * model_width as f32;
-        let mut model_intersection_y = local_intersection.y / self.bb_height * model_height as f32;
-        let mut model_intersection_z = local_intersection.z / self.bb_depth * model_depth as f32;
+        let model_intersection_x = (local_intersection.x / self.bb_width * model_width)
+            .clamp(0.0, model_width - 0.00001);
+        let model_intersection_y = (local_intersection.y / self.bb_height * model_height)
+            .clamp(0.0, model_height - 0.00001);
+        let model_intersection_z = (local_intersection.z / self.bb_depth * model_depth)
+            .clamp(0.0, model_depth - 0.00001);
 
         let delta_dist = Vector3::new(
             ray_direction.x.recip().abs(),
@@ -85,59 +121,25 @@ impl Object {
             ray_direction.z.recip().abs(),
         );
 
-        // TODO maybe merge these checks into one somehow
-        // Check wether camera is outside the object's bb
-        let mut voxel_side = if distance > 0.0 {
-            // TODO maybe a better, more efficient solution?
-            if model_intersection_x as u32 >= model_width {
-                model_intersection_x = model_width as f32 - 0.00001;
-            }
-            if model_intersection_y as u32 >= model_height {
-                model_intersection_y = model_height as f32 - 0.00001;
-            }
-            if model_intersection_z as u32 >= model_depth {
-                model_intersection_z = model_depth as f32 - 0.00001;
-            }
-
-            if model_intersection_x as u32 == 0 {
-                VoxelSide::Left
-            } else if model_intersection_x as u32 == model_width {
-                VoxelSide::Right
-            } else if model_intersection_y as u32 == 0 {
-                VoxelSide::Bottom
-            } else if model_intersection_y as u32 == model_height {
-                VoxelSide::Top
-            } else if model_intersection_z as u32 == 0 {
-                VoxelSide::Front
-            } else {
-                VoxelSide::Back
-            }
-        } else {
-            VoxelSide::Inside
-        };
+        let mut voxel_face = hit_face;
         let mut grid_x = model_intersection_x as i32;
         let mut grid_y = model_intersection_y as i32;
         let mut grid_z = model_intersection_z as i32;
-        let (step_x, step_y, step_z) = (
-            ray_direction.x.signum() as i32,
-            ray_direction.y.signum() as i32,
-            ray_direction.z.signum() as i32,
-        );
-        // When traversing through the grid, only 3 possible sides can be hit
-        let x_side = if step_x.is_positive() {
-            VoxelSide::Left
+        // When traversing through the grid, only 3 possible faces can be hit
+        let (step_x, x_face) = if ray_direction.x.is_sign_positive() {
+            (1, VoxelFace::Left)
         } else {
-            VoxelSide::Right
+            (-1, VoxelFace::Right)
         };
-        let y_side = if step_y.is_positive() {
-            VoxelSide::Bottom
+        let (step_y, y_face) = if ray_direction.y.is_sign_positive() {
+            (1, VoxelFace::Bottom)
         } else {
-            VoxelSide::Top
+            (-1, VoxelFace::Top)
         };
-        let z_side = if step_z.is_positive() {
-            VoxelSide::Front
+        let (step_z, z_face) = if ray_direction.z.is_sign_positive() {
+            (1, VoxelFace::Back)
         } else {
-            VoxelSide::Back
+            (-1, VoxelFace::Front)
         };
         let mut side_dist_x = delta_dist.x
             * if ray_direction.x < 0.0 {
@@ -163,7 +165,7 @@ impl Object {
                 self.model_data
                     .get_voxel(grid_x as u32, grid_y as u32, grid_z as u32)
             else {
-                println!(
+                panic!(
                     "x: {}, y: {}, z: {}, dist: {} w: {}, h: {}, d: {}, intersection: {}",
                     grid_x,
                     grid_y,
@@ -174,16 +176,14 @@ impl Object {
                     model_depth,
                     local_intersection
                 );
-                panic!();
             };
             if voxel.a == 255 {
                 let sunlight_direction = -Vector3::new(0.1, 0.2, 0.3).normalize();
-                let normal = voxel_side.get_normal();
+                let normal = voxel_face.get_normal();
                 let sun_diffuse = sunlight_direction.dot(&normal).max(0.0);
                 let player_diffuse = (-ray_direction).dot(&normal).max(0.0);
-                let diffuse = sun_diffuse;
-                let ambient = 0.2;
-                let t = ambient + diffuse + player_diffuse * 0.7;
+                let ambient = 0.15;
+                let t = ambient + sun_diffuse * 0.9 + player_diffuse * 0.55;
                 return Some(Color {
                     r: ((voxel.r as f32 * t) as u8),
                     g: ((voxel.g as f32 * t) as u8),
@@ -198,14 +198,14 @@ impl Object {
                     if grid_x < 0 || grid_x >= model_width as i32 {
                         break;
                     }
-                    voxel_side = x_side;
+                    voxel_face = x_face;
                     side_dist_x += delta_dist.x;
                 } else {
                     grid_z += step_z;
                     if grid_z < 0 || grid_z >= model_depth as i32 {
                         break;
                     }
-                    voxel_side = z_side;
+                    voxel_face = z_face;
                     side_dist_z += delta_dist.z;
                 }
             } else if side_dist_y < side_dist_z {
@@ -213,14 +213,14 @@ impl Object {
                 if grid_y < 0 || grid_y >= model_height as i32 {
                     break;
                 }
-                voxel_side = y_side;
+                voxel_face = y_face;
                 side_dist_y += delta_dist.y;
             } else {
                 grid_z += step_z;
                 if grid_z < 0 || grid_z >= model_depth as i32 {
                     break;
                 }
-                voxel_side = z_side;
+                voxel_face = z_face;
                 side_dist_z += delta_dist.z;
             }
         }
@@ -291,7 +291,7 @@ pub enum ModelType {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum VoxelSide {
+pub enum VoxelFace {
     Top,
     Bottom,
     Left,
@@ -301,16 +301,16 @@ pub enum VoxelSide {
     Inside,
 }
 
-impl VoxelSide {
+impl VoxelFace {
     fn get_normal(&self) -> Vector3<f32> {
         match self {
-            VoxelSide::Top => Vector3::new(0.0, 1.0, 0.0),
-            VoxelSide::Bottom => Vector3::new(0.0, -1.0, 0.0),
-            VoxelSide::Left => Vector3::new(-1.0, 0.0, 0.0),
-            VoxelSide::Right => Vector3::new(1.0, 0.0, 0.0),
-            VoxelSide::Front => Vector3::new(0.0, 0.0, -1.0),
-            VoxelSide::Back => Vector3::new(0.0, 0.0, 1.0),
-            VoxelSide::Inside => Vector3::new(0.0, 0.0, 0.0),
+            VoxelFace::Top => Vector3::new(0.0, 1.0, 0.0),
+            VoxelFace::Bottom => Vector3::new(0.0, -1.0, 0.0),
+            VoxelFace::Left => Vector3::new(-1.0, 0.0, 0.0),
+            VoxelFace::Right => Vector3::new(1.0, 0.0, 0.0),
+            VoxelFace::Front => Vector3::new(0.0, 0.0, 1.0),
+            VoxelFace::Back => Vector3::new(0.0, 0.0, -1.0),
+            VoxelFace::Inside => Vector3::new(0.0, 0.0, 0.0),
         }
     }
 }

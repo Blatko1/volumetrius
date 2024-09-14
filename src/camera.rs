@@ -7,8 +7,8 @@ use crate::control::GameInput;
 const PITCH_CAP: f32 = PI / 2.0 - f32::EPSILON;
 const FOV_MIN: f32 = PI / 15.0;
 const FOV_MAX: f32 = PI * 2.0 / 3.0;
-const WALK_SPEED: f32 = 6.0;
-const FLY_SPEED: f32 = 5.0;
+const WALK_SPEED: f32 = 9.0;
+const FLY_SPEED: f32 = 7.0;
 const MOUSE_SPEED: f32 = 0.0035;
 
 // TODO make pub(super) or remove pub
@@ -26,8 +26,8 @@ pub struct Camera {
     pub aspect_ratio: f32,
 
     // Only for GPU rendering stuff
-    near: f32,
-    far: f32,
+    znear: f32,
+    zfar: f32,
 
     input_state: CameraInputState,
 }
@@ -56,8 +56,8 @@ impl Camera {
             focal_distance: 0.5 / (fov * 0.5).tan(),
             aspect_ratio,
 
-            near: 0.1,
-            far: 100.0,
+            znear: 0.1,
+            zfar: 1000.0,
 
             input_state: CameraInputState::default(),
         };
@@ -89,13 +89,9 @@ impl Camera {
             self.origin.y - self.dir.y,
             self.origin.z - self.dir.z,
         );
-        let projection = Matrix4::new_perspective(
-            self.aspect_ratio,
-            self.fov,
-            self.near,
-            self.far,
-        );
-        let view = Matrix4::look_at_lh(&self.origin , &target, &self.plane_vertical);
+        let projection =
+            Matrix4::new_perspective(self.aspect_ratio, self.fov, self.znear, self.zfar);
+        let view = Matrix4::look_at_lh(&self.origin, &target, &self.plane_vertical);
         projection * view
     }
 

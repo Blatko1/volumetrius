@@ -172,8 +172,6 @@ impl Canvas {
             multiview: None,
         });
 
-
-
         let dbg_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("DBG Vertex Buffer"),
             contents: &[],
@@ -370,8 +368,11 @@ impl Canvas {
     }
 
     pub fn update_dbg_matrix(&self, matrix: Matrix4<f32>) {
-        self.ctx.queue().write_buffer
-        (&self.dbg_matrix_buffer, 0, bytemuck::cast_slice(matrix.as_slice()));
+        self.ctx.queue().write_buffer(
+            &self.dbg_matrix_buffer,
+            0,
+            bytemuck::cast_slice(matrix.as_slice()),
+        );
     }
 
     pub fn update_dbg_vertices(&mut self, objects: &[Object]) {
@@ -383,29 +384,60 @@ impl Canvas {
             let width = object.bb_width;
             let height = object.bb_height;
             let depth = object.bb_depth;
-            vertices.push([p.x, p.y, p.z]);
-            vertices.push([p.x + width, p.y, p.z]);
-            vertices.push([p.x, p.y, p.z + depth]);
-            vertices.push([p.x + width, p.y, p.z + depth]);
+            vertices.push([p.x, p.y, p.z]); // 0
+            vertices.push([p.x + width, p.y, p.z]); // 1
+            vertices.push([p.x, p.y, p.z + depth]); // 2
+            vertices.push([p.x + width, p.y, p.z + depth]); // 3
 
-            vertices.push([p.x, p.y + height, p.z]);
-            vertices.push([p.x + width, p.y + height, p.z]);
-            vertices.push([p.x, p.y + height, p.z + depth]);
-            vertices.push([p.x + width, p.y + height, p.z + depth]);
+            vertices.push([p.x, p.y + height, p.z]); // 4
+            vertices.push([p.x + width, p.y + height, p.z]); // 5
+            vertices.push([p.x, p.y + height, p.z + depth]); // 6
+            vertices.push([p.x + width, p.y + height, p.z + depth]); // 7
 
-            indices.append(&mut vec![i, i+1, i, i+2, i, i+3, i, i+4, i+1, i+4, i+2, i+4])
+            indices.append(&mut vec![
+                i,
+                i + 1,
+                i,
+                i + 2,
+                i + 1,
+                i + 3,
+                i + 2,
+                i + 3,
+                i,
+                i + 4,
+                i + 4,
+                i + 5,
+                i + 5,
+                i + 1,
+                i + 4,
+                i + 6,
+                i + 2,
+                i + 6,
+                i + 6,
+                i + 7,
+                i + 7,
+                i + 3,
+                i + 7,
+                i + 5,
+            ])
         }
         //println!("vertices: {:?}, indeices: {:?}", vertices, indices);
-        self.dbg_vertex_buffer = self.ctx.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("DBG Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
-        self.dbg_index_buffer = self.ctx.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("DBG Index Buffer"),
-            contents: bytemuck::cast_slice(&indices),
-            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-        });
+        self.dbg_vertex_buffer =
+            self.ctx
+                .device()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("DBG Vertex Buffer"),
+                    contents: bytemuck::cast_slice(&vertices),
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                });
+        self.dbg_index_buffer =
+            self.ctx
+                .device()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("DBG Index Buffer"),
+                    contents: bytemuck::cast_slice(&indices),
+                    usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+                });
         self.dbg_indices_count = indices.len() as u32;
     }
 
