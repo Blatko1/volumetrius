@@ -1,6 +1,6 @@
 pub mod ctx;
 
-use nalgebra::{Matrix4, Vector3};
+use nalgebra::Matrix4;
 use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalSize;
 
@@ -357,7 +357,7 @@ impl Canvas {
             rpass.set_bind_group(0, &self.dbg_bind_group, &[]);
             rpass.set_vertex_buffer(0, self.dbg_vertex_buffer.slice(..));
             rpass.set_index_buffer(self.dbg_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.dbg_indices_count as u32, 0, 0..1);
+            rpass.draw_indexed(0..self.dbg_indices_count, 0, 0..1);
         }
 
         self.ctx.queue().submit(Some(encoder.finish()));
@@ -380,12 +380,13 @@ impl Canvas {
     pub fn update_dbg_vertices(&mut self, objects: &[Object]) {
         let mut vertices = Vec::with_capacity(objects.len() * 8);
         let mut indices = Vec::with_capacity(objects.len() * 32);
+        // For global AABB
         for object in objects {
             let i = vertices.len() as u16;
-            let p = object.aabb_min;
-            let width = (object.aabb_max.x - object.aabb_min.x).abs();
-            let height = (object.aabb_max.y - object.aabb_min.y).abs();
-            let depth = (object.aabb_max.z - object.aabb_min.z).abs();
+            let p = object.global_aabb.min();
+            let width = object.global_aabb.width();
+            let height = object.global_aabb.height();
+            let depth = object.global_aabb.depth();
             vertices.push([p.x, p.y, p.z]); // 0
             vertices.push([p.x + width, p.y, p.z]); // 1
             vertices.push([p.x, p.y, p.z + depth]); // 2
@@ -395,6 +396,47 @@ impl Canvas {
             vertices.push([p.x + width, p.y + height, p.z]); // 5
             vertices.push([p.x, p.y + height, p.z + depth]); // 6
             vertices.push([p.x + width, p.y + height, p.z + depth]); // 7
+
+            indices.append(&mut vec![
+                i,
+                i + 1,
+                i,
+                i + 2,
+                i + 1,
+                i + 3,
+                i + 2,
+                i + 3,
+                i,
+                i + 4,
+                i + 4,
+                i + 5,
+                i + 5,
+                i + 1,
+                i + 4,
+                i + 6,
+                i + 2,
+                i + 6,
+                i + 6,
+                i + 7,
+                i + 7,
+                i + 3,
+                i + 7,
+                i + 5,
+            ])
+        }
+        // For oriented BB
+        for object in objects {
+            let i = vertices.len() as u16;
+            let obb = &object.obb;
+            vertices.push([obb.p1.x, obb.p1.y, obb.p1.z]); // 0
+            vertices.push([obb.p2.x, obb.p2.y, obb.p2.z]); // 1
+            vertices.push([obb.p4.x, obb.p4.y, obb.p4.z]); // 2
+            vertices.push([obb.p3.x, obb.p3.y, obb.p3.z]); // 3
+
+            vertices.push([obb.p5.x, obb.p5.y, obb.p5.z]); // 4
+            vertices.push([obb.p6.x, obb.p6.y, obb.p6.z]); // 5
+            vertices.push([obb.p8.x, obb.p8.y, obb.p8.z]); // 6
+            vertices.push([obb.p7.x, obb.p7.y, obb.p7.z]); // 7
 
             indices.append(&mut vec![
                 i,

@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 
 use crate::{
     camera::Camera,
-    object::{ModelType, Object, VoxelFace},
+    object::{ModelType, Object},
 };
 use bvh::{bvh::Bvh, ray::Ray};
 use nalgebra::{Point3, UnitQuaternion, Vector3};
@@ -17,17 +17,35 @@ impl World {
     pub fn new() -> Self {
         let object1 = Object::new(
             ModelType::Knight,
-            Vector3::new(-20.0, -50.0, 5.0),
-            UnitQuaternion::from_axis_angle(&Vector3::z_axis(), PI),
+            Vector3::new(-20.0, -40.0, 5.0),
+            UnitQuaternion::from_euler_angles(0.0, 0.0, 0.0),
             Vector3::new(2.0, 2.0, 2.0),
         );
-        let object2 = Object::new(ModelType::Knight, Vector3::new(-15.0, -10.0, -10.0),
-        UnitQuaternion::from_axis_angle(&Vector3::z_axis(), PI),
-        Vector3::new(2.0, 2.0, 2.0));
-        //let object3 = Object::new(ModelType::Knight, Point3::new(25.0, -10.0, -20.0), 2.0);
-        //let object4 = Object::new(ModelType::Knight, Point3::new(0.0, -10.0, -20.0), 0.4);
-        //let object5 = Object::new(ModelType::Knight, Point3::new(-20.0, -10.0, -20.0), 0.7);
-        let mut objects: Vec<Object> = vec![object1, object2, /*object3, object4, object5*/];
+        let object2 = Object::new(
+            ModelType::Knight,
+            Vector3::new(-9.5, -40.0, 7.0),
+            UnitQuaternion::from_axis_angle(&Vector3::z_axis(), PI / 4.0),
+            Vector3::new(1.0, 1.0, 1.0),
+        );
+        let object3 = Object::new(
+            ModelType::Knight,
+            Vector3::new(20.0, -10.0, -10.0),
+            UnitQuaternion::from_euler_angles(PI / 6.0, 0.0, PI / 2.0),
+            Vector3::new(1.0, 1.0, 1.0),
+        );
+        let object4 = Object::new(
+            ModelType::Knight,
+            Vector3::new(-10.5, -40.0, 10.0),
+            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI / 3.0),
+            Vector3::new(0.5, 0.5, 0.5),
+        );
+        let object5 = Object::new(
+            ModelType::Monu,
+            Vector3::new(-15.5, -40.0, -10.0),
+            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI / 3.0),
+            Vector3::new(0.5, 0.5, 0.5),
+        );
+        let mut objects: Vec<Object> = vec![object1, object2, object3, object4, object5];
         let bvh = Bvh::build(&mut objects);
         Self { objects, bvh }
     }
@@ -36,7 +54,7 @@ impl World {
         &self,
         origin: Point3<f32>,
         normalized_direction: Vector3<f32>,
-    ) -> Vec<(&Object, (f32, VoxelFace))> {
+    ) -> Vec<(&Object, f32)> {
         // Manually creating the Ray to preserve performance
         let ray = Ray {
             origin,
@@ -46,9 +64,14 @@ impl World {
         let hit_objects = self.bvh.traverse(&ray, self.objects.as_slice());
         let mut objects_with_distance: Vec<_> = hit_objects
             .into_iter()
-            .map(|obj| (obj, obj.get_aabb_intersection(origin, normalized_direction)))
+            .map(|obj| {
+                (
+                    obj,
+                    obj.global_aabb.get_distance(origin, normalized_direction),
+                )
+            })
             .collect();
-        objects_with_distance.sort_by(|(_, (a, _)), (_, (b, _))| a.partial_cmp(&b).unwrap());
+        objects_with_distance.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
         objects_with_distance
     }
 
@@ -85,6 +108,7 @@ impl Renderer {
     }
 
     pub fn render_pixel(&self, camera: &Camera, x: usize, y: usize, pixel: &mut [u8]) {
+        // TODO precalculate these values in Canvas until the ray_direction variable.
         let plane_x = 2.0 * x as f32 / self.width as f32 - 1.0;
         let plane_y = 2.0 * y as f32 / self.height as f32 - 1.0;
         let ray_2d = plane_x * camera.plane_horizontal * camera.aspect_ratio
@@ -96,18 +120,37 @@ impl Renderer {
             .world
             .traverse_bvh_and_sort(camera.origin, ray_direction);
 
-        let mut no_hit = true;
-        // From closest object to furthest
-        for (object, (distance, hit_face)) in objects {
-            if let Some(color) = object.traverse(camera.origin, ray_direction, distance, hit_face) {
-                pixel[0] = color.r;
-                pixel[1] = color.g;
-                pixel[2] = color.b;
-                no_hit = false;
+        let mut color = None;
+        let mut objects_iter = objects.iter();
+        while let Some((object, _)) = objects_iter.next() {
+            // Traverse each object from closest object to furthest object
+            if let Some((c, dist, _)) = object.traverse(camera.origin, ray_direction) {
+                color = Some(c);
+                let mut min_distance = dist;
+                // Check if it has any objects which it intersects
+                for (rest, _) in objects_iter {
+                    if object.global_aabb.intersects(&rest.global_aabb) {
+                        // If it intersects and object, check if that object is actually closer when drawn.
+                        if let Some((c, dist, _)) = rest.traverse(camera.origin, ray_direction) {
+                            if dist < min_distance {
+                                min_distance = dist;
+                                color = Some(c);
+                            }
+                        }
+                        continue;
+                    }
+                    // If the next closest object does not intersect, stop iterating
+                    break;
+                }
                 break;
             }
         }
-        if no_hit {
+
+        if let Some(color) = color {
+            pixel[0] = color.r;
+            pixel[1] = color.g;
+            pixel[2] = color.b;
+        } else {
             pixel[0] = 26;
             pixel[1] = 51;
             pixel[2] = 150;

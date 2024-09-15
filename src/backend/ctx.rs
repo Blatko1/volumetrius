@@ -21,7 +21,7 @@ impl Ctx {
                 .create_window(Window::default_attributes().with_title("RayVenture"))
                 .unwrap(),
         );
-        let _ = window.request_inner_size(LogicalSize::new(600, 350));
+        let _ = window.request_inner_size(LogicalSize::new(600 * 2, 350 * 2));
 
         let size = window.inner_size();
         let backends = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::PRIMARY);
