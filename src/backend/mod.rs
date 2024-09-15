@@ -170,6 +170,7 @@ impl Canvas {
             }),
             depth_stencil: None,
             multiview: None,
+            cache: None,
         });
 
         let dbg_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -255,6 +256,7 @@ impl Canvas {
             }),
             depth_stencil: None,
             multiview: None,
+            cache: None,
         });
 
         let buffer_len = (canvas_width * canvas_height * 4) as usize;
@@ -380,10 +382,10 @@ impl Canvas {
         let mut indices = Vec::with_capacity(objects.len() * 32);
         for object in objects {
             let i = vertices.len() as u16;
-            let p = object.bb_min;
-            let width = object.bb_width;
-            let height = object.bb_height;
-            let depth = object.bb_depth;
+            let p = object.aabb_min;
+            let width = (object.aabb_max.x - object.aabb_min.x).abs();
+            let height = (object.aabb_max.y - object.aabb_min.y).abs();
+            let depth = (object.aabb_max.z - object.aabb_min.z).abs();
             vertices.push([p.x, p.y, p.z]); // 0
             vertices.push([p.x + width, p.y, p.z]); // 1
             vertices.push([p.x, p.y, p.z + depth]); // 2

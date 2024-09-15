@@ -1,11 +1,12 @@
 use core::f32;
+use std::f32::consts::PI;
 
 use crate::{
     camera::Camera,
     object::{ModelType, Object, VoxelFace},
 };
 use bvh::{bvh::Bvh, ray::Ray};
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point3, UnitQuaternion, Vector3};
 
 pub struct World {
     objects: Vec<Object>,
@@ -14,12 +15,19 @@ pub struct World {
 
 impl World {
     pub fn new() -> Self {
-        let object1 = Object::new(ModelType::Monu, Point3::new(-20.0, -50.0, 5.0), 1.0);
-        let object2 = Object::new(ModelType::Knight, Point3::new(-15.0, -10.0, -10.0), 0.1);
-        let object3 = Object::new(ModelType::Knight, Point3::new(25.0, -10.0, -20.0), 2.0);
-        let object4 = Object::new(ModelType::Knight, Point3::new(0.0, -10.0, -20.0), 0.4);
-        let object5 = Object::new(ModelType::Knight, Point3::new(-20.0, -10.0, -20.0), 0.7);
-        let mut objects: Vec<Object> = vec![object1, object2, object3, object4, object5];
+        let object1 = Object::new(
+            ModelType::Knight,
+            Vector3::new(-20.0, -50.0, 5.0),
+            UnitQuaternion::from_axis_angle(&Vector3::z_axis(), PI),
+            Vector3::new(2.0, 2.0, 2.0),
+        );
+        let object2 = Object::new(ModelType::Knight, Vector3::new(-15.0, -10.0, -10.0),
+        UnitQuaternion::from_axis_angle(&Vector3::z_axis(), PI),
+        Vector3::new(2.0, 2.0, 2.0));
+        //let object3 = Object::new(ModelType::Knight, Point3::new(25.0, -10.0, -20.0), 2.0);
+        //let object4 = Object::new(ModelType::Knight, Point3::new(0.0, -10.0, -20.0), 0.4);
+        //let object5 = Object::new(ModelType::Knight, Point3::new(-20.0, -10.0, -20.0), 0.7);
+        let mut objects: Vec<Object> = vec![object1, object2, /*object3, object4, object5*/];
         let bvh = Bvh::build(&mut objects);
         Self { objects, bvh }
     }
@@ -38,7 +46,7 @@ impl World {
         let hit_objects = self.bvh.traverse(&ray, self.objects.as_slice());
         let mut objects_with_distance: Vec<_> = hit_objects
             .into_iter()
-            .map(|obj| (obj, obj.get_intersection(origin, normalized_direction)))
+            .map(|obj| (obj, obj.get_aabb_intersection(origin, normalized_direction)))
             .collect();
         objects_with_distance.sort_by(|(_, (a, _)), (_, (b, _))| a.partial_cmp(&b).unwrap());
         objects_with_distance

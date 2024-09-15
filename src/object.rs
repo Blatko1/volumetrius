@@ -1,27 +1,43 @@
 use core::f32;
+use std::f32::consts::{FRAC_2_PI, PI};
 
 use bvh::{
     aabb::{Aabb, Bounded},
     bounding_hierarchy::BHShape,
 };
 use dot_vox::{Color, Model};
-use nalgebra::{Point3, Vector3};
+use nalgebra::{
+    Matrix3, Matrix4, Point3, Quaternion, Rotation3, Scale3, Transform, Transform3, Translation3, UnitQuaternion, UnitVector3, Vector3, Vector4
+};
 
 // TODO remove unnecessary pub
 #[derive(Debug)]
 pub struct Object {
-    pub bb_min: Point3<f32>,
-    pub bb_max: Point3<f32>,
-    pub bb_width: f32,
-    pub bb_height: f32,
-    pub bb_depth: f32,
+    pub aabb_min: Point3<f32>,
+    pub aabb_max: Point3<f32>,
+
+    pub obb_min: Point3<f32>,
+    pub obb_max: Point3<f32>,
+    pub obb_width: f32,
+    pub obb_height: f32,
+    pub obb_depth: f32,
     model_data: ModelData,
+
+    obb_scale: Vector3<f32>,
+    obb_translation: Vector3<f32>,
+    obb_rotation: UnitQuaternion<f32>,
+    pub obb_transformation: Matrix4<f32>,
 
     node_index: usize,
 }
 
 impl Object {
-    pub fn new(model_type: ModelType, position: Point3<f32>, scale: f32) -> Self {
+    pub fn new(
+        model_type: ModelType,
+        translation: Vector3<f32>,
+        rotation: UnitQuaternion<f32>,
+        scale: Vector3<f32>,
+    ) -> Self {
         let model = match model_type {
             ModelType::Knight => {
                 dot_vox::load("res/knight.vox").expect("Failed to load knight.vox")
@@ -30,25 +46,73 @@ impl Object {
         };
         let model_data =
             ModelData::from_vox_model(model.models.into_iter().next().unwrap(), model.palette);
-        let bb_min = position;
-        let bb_max = Point3::new(
-            bb_min.x + model_data.width as f32 * scale,
-            bb_min.y + model_data.height as f32 * scale,
-            bb_min.z + model_data.depth as f32 * scale,
-        );
-        Self {
-            bb_min,
-            bb_max,
-            bb_width: (bb_min.x - bb_max.x).abs(),
-            bb_height: (bb_min.y - bb_max.y).abs(),
-            bb_depth: (bb_min.z - bb_max.z).abs(),
+        let half_width = model_data.width as f32 * 0.5;
+        let half_height = model_data.height as f32 * 0.5;
+        let half_depth = model_data.depth as f32 * 0.5;
+        let obb_min = Point3::new(-half_width, -half_height, -half_depth);
+        let obb_max = -obb_min;
+        let mut object = Self {
+            aabb_min: obb_min + translation,
+            aabb_max: obb_max + translation,
+
+            obb_min,
+            obb_max,
+            obb_width: (obb_min.x - obb_max.x).abs(),
+            obb_height: (obb_min.y - obb_max.y).abs(),
+            obb_depth: (obb_min.z - obb_max.z).abs(),
             model_data,
 
+            obb_scale: Vector3::new(1.0, 1.0, 1.0),
+            obb_translation: Vector3::zeros(),
+            obb_rotation: UnitQuaternion::identity(),
+            obb_transformation: Matrix4::identity(),
+
             node_index: 0,
-        }
+        };
+
+        object.set_scale(scale);
+        object.rotate(rotation);
+        object.translate(&translation);
+        object.update_transformation_matrix();
+
+        object
     }
 
-    pub fn get_intersection(
+    pub fn set_scale(&mut self, scale: Vector3<f32>) {
+        self.obb_scale = scale;
+    }
+
+    pub fn add_scale(&mut self, scale: &Vector3<f32>) {
+        self.obb_scale += scale;
+    }
+
+    pub fn translate(&mut self, translation: &Vector3<f32>) {
+        self.obb_translation += translation;
+    }
+
+    pub fn rotate(&mut self, rotation: UnitQuaternion<f32>) {
+        self.obb_rotation = rotation * self.obb_rotation;
+    }
+
+    pub fn set_transfromation(&mut self, scale: Vector3<f32>, translation: Vector3<f32>, rotation: UnitQuaternion<f32>) {
+        self.obb_scale = scale;
+        self.obb_translation = translation;
+    }
+
+    pub fn update_transformation_matrix(&mut self) {
+        self.obb_transformation = Matrix4::new_translation(&self.obb_translation)
+            * self.obb_rotation.to_homogeneous()
+            * Matrix4::new_nonuniform_scaling(&self.obb_scale);
+    }
+
+    /*pub fn rotate_obb_around_point(&mut self, axis: &UnitVector3<f32>, angle: f32, point: &Vector3<f32>) {
+        let translation_to_point = Matrix4::new_translation(&-point);
+        let rotation = UnitQuaternion::from_axis_angle(axis, angle).to_homogeneous();
+        let translation_back_from_point = Matrix4::new_translation(&point);
+        self.obb_transformation = self.obb_transformation * translation_back_from_point * rotation * translation_to_point;
+    }*/
+
+    pub fn get_aabb_intersection(
         &self,
         origin: Point3<f32>,
         direction: Vector3<f32>,
@@ -56,12 +120,12 @@ impl Object {
         let inv_dir_x = direction.x.recip();
         let inv_dir_y = direction.y.recip();
         let inv_dir_z = direction.z.recip();
-        let t1 = (self.bb_min.x - origin.x) * inv_dir_x;
-        let t2 = (self.bb_max.x - origin.x) * inv_dir_x;
-        let t3 = (self.bb_min.y - origin.y) * inv_dir_y;
-        let t4 = (self.bb_max.y - origin.y) * inv_dir_y;
-        let t5 = (self.bb_min.z - origin.z) * inv_dir_z;
-        let t6 = (self.bb_max.z - origin.z) * inv_dir_z;
+        let t1 = (self.aabb_min.x - origin.x) * inv_dir_x;
+        let t2 = (self.aabb_max.x - origin.x) * inv_dir_x;
+        let t3 = (self.aabb_min.y - origin.y) * inv_dir_y;
+        let t4 = (self.aabb_max.y - origin.y) * inv_dir_y;
+        let t5 = (self.aabb_min.z - origin.z) * inv_dir_z;
+        let t6 = (self.aabb_max.z - origin.z) * inv_dir_z;
 
         let min_t1_t2 = t1.min(t2);
         let min_t3_t4 = t3.min(t4);
@@ -103,17 +167,17 @@ impl Object {
         hit_face: VoxelFace,
     ) -> Option<Color> {
         let intersection = origin + ray_direction * distance.max(0.0);
-        let local_intersection = intersection - self.bb_min;
+        let local_intersection = intersection - self.aabb_min;
         let model_width = self.model_data.width as f32;
         let model_height = self.model_data.height as f32;
         let model_depth = self.model_data.depth as f32;
         // Scaled to dimensions of the model, the intersection point on the actual model
-        let model_intersection_x = (local_intersection.x / self.bb_width * model_width)
-            .clamp(0.0, model_width - 0.00001);
-        let model_intersection_y = (local_intersection.y / self.bb_height * model_height)
+        let model_intersection_x =
+            (local_intersection.x / self.obb_width * model_width).clamp(0.0, model_width - 0.00001);
+        let model_intersection_y = (local_intersection.y / self.obb_height * model_height)
             .clamp(0.0, model_height - 0.00001);
-        let model_intersection_z = (local_intersection.z / self.bb_depth * model_depth)
-            .clamp(0.0, model_depth - 0.00001);
+        let model_intersection_z =
+            (local_intersection.z / self.obb_depth * model_depth).clamp(0.0, model_depth - 0.00001);
 
         let delta_dist = Vector3::new(
             ray_direction.x.recip().abs(),
@@ -230,7 +294,7 @@ impl Object {
 
 impl Bounded<f32, 3> for Object {
     fn aabb(&self) -> Aabb<f32, 3> {
-        Aabb::with_bounds(self.bb_min, self.bb_max)
+        Aabb::with_bounds(self.aabb_min, self.aabb_max)
     }
 }
 
