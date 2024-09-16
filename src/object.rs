@@ -24,7 +24,7 @@ pub struct Object {
 
     scale: Vector3<f32>,
     translation: Vector3<f32>,
-    rotation: UnitQuaternion<f32>,
+    pub rotation: UnitQuaternion<f32>,
     pub transformation: Matrix4<f32>,
 
     node_index: usize,

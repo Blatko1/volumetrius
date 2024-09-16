@@ -83,14 +83,14 @@ impl Camera {
         self.focal_distance = 1.0 / (self.fov * 0.5).tan();
     }
 
-    pub fn get_global_matrix(&mut self) -> Matrix4<f32> {
+    pub fn get_global_matrix(&mut self, config: &wgpu::SurfaceConfiguration) -> Matrix4<f32> {
         let target = Point3::new(
             self.origin.x - self.dir.x,
             self.origin.y - self.dir.y,
             self.origin.z - self.dir.z,
         );
         let projection =
-            Matrix4::new_perspective(self.aspect_ratio, self.fov, self.znear, self.zfar);
+            Matrix4::new_perspective((config.width as f32 / config.height as f32), self.fov, self.znear, self.zfar);
         let view = Matrix4::look_at_lh(&self.origin, &target, &self.plane_vertical);
         projection * view
     }

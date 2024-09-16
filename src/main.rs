@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use backend::ctx::Ctx;
 use backend::Canvas;
+use bvh::bounding_hierarchy::BoundingHierarchy;
 use camera::Camera;
 use control::{ControllerSettings, GameInput};
 use nalgebra::Point3;
@@ -117,9 +118,14 @@ impl ApplicationHandler for State {
             }
             WindowEvent::RedrawRequested => {
                 let canvas = self.canvas.as_mut().unwrap();
-                self.renderer.render(&self.camera, canvas.frame_mut());
-                canvas.update_dbg_matrix(self.camera.get_global_matrix());
+                //self.renderer.render(&self.camera, canvas.frame_mut());
+                let flat_bvh = self.renderer.world.flatten();
+                let objects = self.renderer.world.objects();
+                canvas.update_dbg_matrix(self.camera.get_global_matrix(canvas.ctx().config()));
                 canvas.update_dbg_vertices(self.renderer.world.objects());
+                canvas.update_bvh_buffer(flat_bvh);
+                canvas.update_camera_buffer(&self.camera);
+                canvas.update_shapes_buffer(objects);
 
                 match canvas.render() {
                     Ok(_) => (),

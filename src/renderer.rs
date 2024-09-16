@@ -5,7 +5,7 @@ use crate::{
     camera::Camera,
     object::{ModelType, Object},
 };
-use bvh::{bvh::Bvh, ray::Ray};
+use bvh::{bvh::Bvh, flat_bvh::FlatBvh, ray::Ray};
 use nalgebra::{Point3, UnitQuaternion, Vector3};
 use rayon::{
     iter::{IndexedParallelIterator, ParallelIterator},
@@ -27,7 +27,7 @@ impl World {
         );
         let object2 = Object::new(
             ModelType::Knight,
-            Vector3::new(-9.5, -40.0, 7.0),
+            Vector3::new(-90.5, -40.0, 7.0),
             UnitQuaternion::from_axis_angle(&Vector3::z_axis(), PI / 4.0),
             Vector3::new(1.0, 1.0, 1.0),
         );
@@ -39,7 +39,7 @@ impl World {
         );
         let object4 = Object::new(
             ModelType::Knight,
-            Vector3::new(-10.5, -40.0, 10.0),
+            Vector3::new(-10.5, -40.0, 50.0),
             UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI / 3.0),
             Vector3::new(0.5, 0.5, 0.5),
         );
@@ -52,6 +52,14 @@ impl World {
         let mut objects: Vec<Object> = vec![object1, object2, object3, object4, object5];
         let bvh = Bvh::build(&mut objects);
         Self { objects, bvh }
+    }
+
+    pub fn flatten(&self) -> FlatBvh<f32, 3> {
+        self.bvh.flatten()
+    }
+
+    pub fn objects(&self) -> &[Object] {
+        &self.objects
     }
 
     pub fn traverse_bvh_and_sort(
@@ -77,10 +85,6 @@ impl World {
             .collect();
         objects_with_distance.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
         objects_with_distance
-    }
-
-    pub fn objects(&self) -> &[Object] {
-        &self.objects
     }
 }
 
