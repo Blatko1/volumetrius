@@ -24,8 +24,8 @@ use winit::{
 };
 
 const FPS_CAP: u32 = 60;
-const CANVAS_WIDTH: u32 = 16 * 20;
-const CANVAS_HEIGHT: u32 = 9 * 20;
+const CANVAS_WIDTH: u32 = 16 * 120;
+const CANVAS_HEIGHT: u32 = 9 * 120;
 const PHYSICS_TIMESTEP: f32 = 0.01;
 const SLEEP_BETWEEN_FRAMES: bool = false;
 
@@ -66,11 +66,10 @@ impl State {
     }
 
     fn update(&mut self, delta: f32) {
-        self.camera.update(delta);
-        // Update world and player
         self.delta_accumulator += delta;
         while self.delta_accumulator >= PHYSICS_TIMESTEP {
             self.delta_accumulator -= PHYSICS_TIMESTEP;
+            self.camera.update(PHYSICS_TIMESTEP);
         }
     }
 

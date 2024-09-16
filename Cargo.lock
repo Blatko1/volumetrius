@@ -2002,6 +2002,7 @@ dependencies = [
  "log",
  "nalgebra",
  "pollster",
+ "rayon",
  "strum",
  "wgpu",
  "winit",

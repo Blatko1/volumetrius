@@ -110,7 +110,7 @@ impl Object {
         self.global_aabb = global_aabb;
     }
 
-    pub fn traverse(
+    pub fn try_traverse(
         &self,
         origin: Point3<f32>,
         ray_direction: Vector3<f32>,

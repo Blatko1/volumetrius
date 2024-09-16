@@ -7,6 +7,10 @@ use crate::{
 };
 use bvh::{bvh::Bvh, ray::Ray};
 use nalgebra::{Point3, UnitQuaternion, Vector3};
+use rayon::{
+    iter::{IndexedParallelIterator, ParallelIterator},
+    slice::ParallelSliceMut,
+};
 
 pub struct World {
     objects: Vec<Object>,
@@ -96,8 +100,9 @@ impl Renderer {
         }
     }
     pub fn render(&self, camera: &Camera, frame: &mut [u8]) {
+        // Using CPU parallelism!!!
         frame
-            .chunks_exact_mut(self.width as usize * 4)
+            .par_chunks_exact_mut(self.width as usize * 4)
             .rev()
             .enumerate()
             .for_each(|(y, row)| {
@@ -124,14 +129,15 @@ impl Renderer {
         let mut objects_iter = objects.iter();
         while let Some((object, _)) = objects_iter.next() {
             // Traverse each object from closest object to furthest object
-            if let Some((c, dist, _)) = object.traverse(camera.origin, ray_direction) {
+            if let Some((c, dist, _)) = object.try_traverse(camera.origin, ray_direction) {
                 color = Some(c);
                 let mut min_distance = dist;
                 // Check if it has any objects which it intersects
                 for (rest, _) in objects_iter {
                     if object.global_aabb.intersects(&rest.global_aabb) {
                         // If it intersects and object, check if that object is actually closer when drawn.
-                        if let Some((c, dist, _)) = rest.traverse(camera.origin, ray_direction) {
+                        if let Some((c, dist, _)) = rest.try_traverse(camera.origin, ray_direction)
+                        {
                             if dist < min_distance {
                                 min_distance = dist;
                                 color = Some(c);
