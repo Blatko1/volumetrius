@@ -48,7 +48,7 @@ impl Ctx {
                 &wgpu::DeviceDescriptor {
                     label: Some("Request Device"),
                     required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                        | wgpu::Features::POLYGON_MODE_LINE,
+                        | wgpu::Features::POLYGON_MODE_LINE | wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
                     required_limits: wgpu::Limits::default(),
                     memory_hints: wgpu::MemoryHints::Performance,
                 },

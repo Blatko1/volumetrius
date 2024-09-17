@@ -1,5 +1,7 @@
 pub mod ctx;
 
+use std::time::UNIX_EPOCH;
+
 use bvh::flat_bvh::FlatNode;
 use nalgebra::{Matrix3, Matrix4};
 use wgpu::util::DeviceExt;
@@ -40,7 +42,9 @@ pub struct Canvas {
 
     bvh_buffer: wgpu::Buffer,
     camera_buffer: wgpu::Buffer,
-    shapes_buffer: wgpu::Buffer
+    shapes_buffer: wgpu::Buffer,
+
+    query_set: wgpu::QuerySet
 }
 
 impl Canvas {
@@ -98,7 +102,7 @@ impl Canvas {
 
         let shapes_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Shapes buffer"),
-            size: size_of::<ShapeData>() as wgpu::BufferAddress * 6,
+            size: size_of::<ShapeData>() as wgpu::BufferAddress * 6 + 32 * 32 * 32 * 1000,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -326,6 +330,11 @@ impl Canvas {
             multiview: None,
             cache: None,
         });
+        let query_set = device.create_query_set(&wgpu::QuerySetDescriptor {
+            label: Some("Query timestep test"),
+            ty: wgpu::QueryType::Timestamp,
+            count: 100,
+        });
 
         let buffer_len = (canvas_width * canvas_height * 4) as usize;
 
@@ -354,7 +363,9 @@ impl Canvas {
 
             bvh_buffer,
             camera_buffer,
-            shapes_buffer
+            shapes_buffer,
+
+            query_set
         }
     }
 
@@ -413,17 +424,22 @@ impl Canvas {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-
+            rpass.write_timestamp(&self.query_set, 0);
             rpass.set_pipeline(&self.pipeline);
+            rpass.write_timestamp(&self.query_set, 1);
             rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            rpass.write_timestamp(&self.query_set, 2);
             rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.write_timestamp(&self.query_set, 3);
             rpass.set_scissor_rect(
                 self.region.x,
                 self.region.y,
                 self.region.width,
                 self.region.height,
             );
+            rpass.write_timestamp(&self.query_set, 4);
             rpass.draw(0..3, 0..1);
+            rpass.write_timestamp(&self.query_set, 5);
 
             rpass.set_pipeline(&self.dbg_pipeline);
             rpass.set_bind_group(0, &self.dbg_bind_group, &[]);
@@ -431,8 +447,49 @@ impl Canvas {
             rpass.set_index_buffer(self.dbg_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             rpass.draw_indexed(0..self.dbg_indices_count, 0, 0..1);
         }
+        let query_dest = self.ctx.device().create_buffer(&wgpu::BufferDescriptor {
+            label: Some("query buffer"),
+            size: 48 as u64,
+            usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC
+            | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let query_read = self.ctx.device().create_buffer(&wgpu::BufferDescriptor {
+            label: Some("query buffer read"),
+            size: 48 as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
+        encoder.resolve_query_set(&self.query_set, 0..6, &query_dest, 0);
+        encoder.copy_buffer_to_buffer(&query_dest, 0, &query_read, 0, 48);
         self.ctx.queue().submit(Some(encoder.finish()));
+
+        let slice = query_read.slice(..);
+        let (sender, receiver) = flume::bounded(1);
+        slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+
+        // TODO don't forget to remove this!!!
+    self.ctx.device().poll(wgpu::Maintain::wait()).panic_on_timeout();
+
+    // Awaits until `buffer_future` can be read from
+    if let Ok(Ok(())) = pollster::block_on(receiver.recv_async()) {
+        let data = slice.get_mapped_range();
+        let result: Vec<u64> = bytemuck::cast_slice(&data).to_vec();
+
+        drop(data);
+        query_read.unmap();
+        let period = self.ctx.queue().get_timestamp_period() as f64;
+        let mut start = *result.first().unwrap();
+        for (i, &t) in result[1..].iter().enumerate() {
+            let time = t - start;
+            //println!("time {}: {:.8} ms", i, time as f64 * period / 1000000.0);
+            start = t;
+        }
+        //println!("\n\n");
+    } else {
+        panic!("failed to run compute on gpu!")
+    }
 
         self.ctx.window().pre_present_notify();
 
@@ -505,6 +562,7 @@ impl Canvas {
                 },
                 inv_transform_matrix: object.transformation.try_inverse().unwrap().into(),
                 inv_rotation_matrix: Mat3::from_matrix3(object.rotation.to_rotation_matrix().inverse().into())
+                
             };
             var_name
         }).collect();
@@ -718,7 +776,7 @@ struct ShapeData {
     global_aabb: AabbData,
     local_aabb: AabbData,
     inv_transform_matrix: Mat4,
-    inv_rotation_matrix: Mat3
+    inv_rotation_matrix: Mat3,
 }
 
 #[repr(C)]

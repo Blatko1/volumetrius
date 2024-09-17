@@ -86,13 +86,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             let inv_transformed_direction = 1.0 / transformed_direction;
 
             let intersection = ray_aabb_intersection(transformed_origin, inv_transformed_direction, object.local_aabb);
-            if !intersection.exists {
+            /*if !intersection.exists {
                 continue;
-            }
+            }*/
             
-            //if ray_intersects_aabb(transformed_origin, inv_transformed_direction, object.local_aabb) {
-            //    return vec4<f32>(0.2, 0.0, 0.6, 1.0);
-            //}
+            if ray_intersects_aabb(transformed_origin, inv_transformed_direction, object.local_aabb) {
+                return vec4<f32>(0.2, 0.0, 0.6, 1.0);
+            }
             index = node.exit_index;            
         } else if ray_intersects_aabb(camera.origin, inv_ray_direction, node.aabb) {
             index = node.entry_index;
@@ -101,11 +101,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         }
     }
 
-    /*for (var i: i32 = 0; i < 13; i++) {
-        if ray_intersects_aabb(camera.origin, ray_direction, bvh[i].aabb) {
-            return vec4<f32>(1.0, 1.0, 0.0, 1.0);
-        }
-    }*/
+        //if ray_intersects_aabb(camera.origin, inv_ray_direction, bvh[0].aabb) {
+        //    return vec4<f32>(1.0, 1.0, 0.0, 1.0);
+        //}
 
     // textureSample(texture, t_sampler, in.tex_pos)
     return vec4<f32>(0.9, 0.9, 0.9, 1.0);

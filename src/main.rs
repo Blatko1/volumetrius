@@ -25,8 +25,8 @@ use winit::{
 };
 
 const FPS_CAP: u32 = 60;
-const CANVAS_WIDTH: u32 = 16 * 120;
-const CANVAS_HEIGHT: u32 = 9 * 120;
+const CANVAS_WIDTH: u32 = 16 * 20;
+const CANVAS_HEIGHT: u32 = 9 * 20;
 const PHYSICS_TIMESTEP: f32 = 0.01;
 const SLEEP_BETWEEN_FRAMES: bool = false;
 

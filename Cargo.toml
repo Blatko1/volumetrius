@@ -15,6 +15,7 @@ nalgebra = "0.33.0"
 bvh = "0.10.0"
 dot_vox = "5.1.1"
 rayon = "1.10.0"
+flume = "0.11.0"
 
 log = "0.4.22"
 env_logger = "0.11.3"
