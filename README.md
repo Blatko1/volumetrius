@@ -1,6 +1,6 @@
 # Volumetrius
 
-## Goal
+## Idea and Goal
 
 Primary goal is to recreate Minecraft but it's completely ray traced (or path traced (idk)). So NO triangles (except the triangle graphics are being drawn on)!
 
