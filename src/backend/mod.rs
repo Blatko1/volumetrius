@@ -208,7 +208,7 @@ impl Canvas {
 
         let shader: wgpu::ShaderModule =
             device.create_shader_module(wgpu::include_wgsl!("../shaders/shader.wgsl"));
-
+                 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[&bind_group_layout],
@@ -296,7 +296,6 @@ impl Canvas {
 
         let dbg_shader: wgpu::ShaderModule =
             device.create_shader_module(wgpu::include_wgsl!("../shaders/dbg_shader.wgsl"));
-
         let dbg_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("DBG Render Pipeline"),
             layout: Some(&dbg_pipeline_layout),

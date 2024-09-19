@@ -2,8 +2,7 @@ use core::f32;
 use std::f32::consts::PI;
 
 use crate::{
-    camera::Camera,
-    object::{ModelType, Object},
+    camera::Camera, chunk::Chunk, object::{ModelType, Object}
 };
 use bvh::{bvh::Bvh, flat_bvh::FlatBvh, ray::Ray};
 use nalgebra::{Point3, UnitQuaternion, Vector3};
@@ -15,6 +14,7 @@ use rayon::{
 pub struct World {
     objects: Vec<Object>,
     bvh: Bvh<f32, 3>,
+    chunks: Vec<Chunk>
 }
 
 impl World {
@@ -51,7 +51,7 @@ impl World {
         );
         let mut objects: Vec<Object> = vec![object1, object2, object3, object4, object5];
         let bvh = Bvh::build(&mut objects);
-        Self { objects, bvh }
+        Self { objects, bvh, chunks: vec![] }
     }
 
     pub fn flatten(&self) -> FlatBvh<f32, 3> {

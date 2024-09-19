@@ -3,6 +3,7 @@ mod camera;
 mod control;
 mod object;
 mod renderer;
+mod chunk;
 
 use std::time::{Duration, Instant};
 

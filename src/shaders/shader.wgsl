@@ -72,6 +72,15 @@ const normal_right = vec3<f32>(1.0, 0.0, 0.0);
 const normal_forward = vec3<f32>(0.0, 0.0, -1.0);
 const normal_backward = vec3<f32>(0.0, 0.0, 1.0);
 
+struct Chunk {
+    a: vec4<f32>
+}
+const chunk_size = 32;
+const chunks_per_dimension = 10;
+const chunks_count = 1000;
+@group(1) @binding(0)
+var<uniform> chunks: array<Chunk, chunks_count>;
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     
@@ -82,37 +91,112 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let inv_direction = 1.0 / ray_direction;
 
     let delta_dist = abs(inv_direction);
-    var grid_pos = vec3<i32>(floor(camera.origin));
     let step = vec3<i32>(sign(ray_direction));
-
+    
     let origin_fract = fract(camera.origin);
+    let origin = vec3<i32>(floor(camera.origin));
+    var chunk_pos = vec3<i32>(0, 0, 0);
+    var voxel_pos = vec3<i32>(origin % chunk_size);
 
-    var side_dist_x = delta_dist.x * select(1.0 - origin_fract.x, origin_fract.x, ray_direction.x < 0.0);
-    var side_dist_y = delta_dist.y * select(1.0 - origin_fract.y, origin_fract.y, ray_direction.y < 0.0);
-    var side_dist_z = delta_dist.z * select(1.0 - origin_fract.z, origin_fract.z, ray_direction.z < 0.0);
+    var dir_compare = vec3<bool>(ray_direction.x < 0.0, ray_direction.y < 0.0, ray_direction.z < 0.0);
+    var side_dist = delta_dist * select(1.0 - origin_fract, origin_fract, dir_compare);
 
-    let dist = 500u;
+    var x_overflow: i32;
+    var x_reset: i32;
+    var chunk_x_overflow: i32;
+    if step.x > 0 {
+        x_overflow = chunk_size;
+        x_reset = 0;
+        chunk_x_overflow = chunks_per_dimension;
+    } else {
+        x_overflow = -1;
+        x_reset = chunk_size - 1;
+        chunk_x_overflow = -chunks_per_dimension - 1;
+    }
+
+    var y_overflow: i32;
+    var y_reset: i32;
+    var chunk_y_overflow: i32;
+    if step.y > 0 {
+        y_overflow = chunk_size;
+        y_reset = 0;
+        chunk_y_overflow = chunks_per_dimension;
+    } else {
+        y_overflow = -1;
+        y_reset = chunk_size - 1;
+        chunk_y_overflow = -chunks_per_dimension - 1;
+    }
+
+    var z_overflow: i32;
+    var z_reset: i32;
+    var chunk_z_overflow: i32;
+    if step.z > 0 {
+        z_overflow = chunk_size;
+        z_reset = 0;
+        chunk_z_overflow = chunks_per_dimension;
+    } else {
+        z_overflow = -1;
+        z_reset = chunk_size - 1;
+        chunk_z_overflow = -chunks_per_dimension - 1;
+    }
+
     var last_step: u32;
     var normal_id: u32;
-    for(var i: u32 = 0u; i < dist; i++) {
-        if side_dist_x < side_dist_y {
-            if side_dist_x < side_dist_z {
-                grid_pos.x += step.x;
+    while true {
+        if voxel_pos.x == 2 && voxel_pos.y == 2 && voxel_pos.z == 2 {
+            break;
+        }
+        if side_dist.x < side_dist.y {
+            if side_dist.x < side_dist.z {
+                voxel_pos.x += step.x;
+                if voxel_pos.x == x_overflow {
+                    chunk_pos.x += step.x;
+                    if chunk_pos.x == chunk_x_overflow {
+                        last_step = 3u;
+                        break;
+                    } 
+                    voxel_pos.x = x_reset;
+                }
                 last_step = 0u;
-                side_dist_x += delta_dist.x;
+                side_dist.x += delta_dist.x;
             } else {
-                grid_pos.z += step.z;
+                voxel_pos.z += step.z;
+                if voxel_pos.z == z_overflow {
+                    chunk_pos.z += step.z;
+                    if chunk_pos.z == chunk_z_overflow {
+                        last_step = 3u;
+                        break;
+                    }
+                    voxel_pos.z = z_reset;
+                }
                 last_step = 2u;
-                side_dist_z += delta_dist.z;
+                side_dist.z += delta_dist.z;
             }
-        } else if side_dist_y < side_dist_z {
-            grid_pos.y += step.y;
+        } else if side_dist.y < side_dist.z {
+            voxel_pos.y += step.y;
+            if voxel_pos.y == y_overflow {
+                chunk_pos.y += step.y;
+                if chunk_pos.y == chunk_y_overflow {
+                    last_step = 3u;
+                    break;
+                } 
+                voxel_pos.y = y_reset;
+            }
             last_step = 1u;
-            side_dist_y += delta_dist.y;
+            side_dist.y += delta_dist.y;
         } else {
-            grid_pos.z += step.z;
+            voxel_pos.z += step.z;
+            if voxel_pos.z == z_overflow {
+                chunk_pos.z += step.z;
+                if chunk_pos.z == chunk_z_overflow {
+                    last_step = 3u;
+                    break;
+                } 
+                voxel_pos.z = z_reset;
+            }
+            
             last_step = 2u;
-            side_dist_z += delta_dist.z;
+            side_dist.z += delta_dist.z;
         }
     }
     var normal: vec3<f32>;
@@ -140,9 +224,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 normal = normal_backward;
             }
             break;
-        } 
+        }
         default: {
-
+            return vec4<f32>(0.0, 0.0, 0.5, 1.0);
         }
     }
 
@@ -163,6 +247,20 @@ struct RayAabbIntersection {
 
 fn ray_aabb_intersection(ray_origin: vec3<f32>, inv_ray_direction: vec3<f32>, aabb: Aabb) -> RayAabbIntersection {
     var result: RayAabbIntersection;
+
+    /*
+    vec3 t0 = (p0- rayOrigin) * invRaydir; 
+    vec3 t1 = (p1- rayOrigin) * invRaydir; 
+    vec3 tmin = min(t0,t1), tmax = max(t0,t1); 
+    return max_component(tmin) <= min_component(tmax);
+    */
+
+    /*let t0 = (aabb.min - ray_origin) * inv_ray_direction;
+    let t1 = (aabb.max - ray_origin) * inv_ray_direction;
+    let t_min = min(t0, t1);
+    let t_max = max(t0, t1);
+    let ffd = max(max(t_min.x, t_min.y), t_min.z) // Front face distance
+    let bfd = min(min(t_max.x, t_max.y), t_max.z) // Back face distance*/
 
     let t1 = (aabb.min.x - ray_origin.x) * inv_ray_direction.x;
     let t2 = (aabb.max.x - ray_origin.x) * inv_ray_direction.x;
