@@ -65,6 +65,13 @@ struct Camera {
 @group(0) @binding(4)
 var<uniform> camera: Camera;
 
+const normal_up = vec3<f32>(0.0, 1.0, 0.0);
+const normal_down = vec3<f32>(0.0, -1.0, 0.0);
+const normal_left = vec3<f32>(-1.0, 0.0, 0.0);
+const normal_right = vec3<f32>(1.0, 0.0, 0.0);
+const normal_forward = vec3<f32>(0.0, 0.0, -1.0);
+const normal_backward = vec3<f32>(0.0, 0.0, 1.0);
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     
@@ -72,41 +79,80 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let pixel_x = frag_coord.x * 2.0 - 1.0;
     let pixel_y = 1.0 - frag_coord.y * 2.0; // turns y upside-down
     let ray_direction = normalize(pixel_x * camera.plane_h * camera.aspect_ratio + pixel_y * camera.plane_v + camera.direction * camera.focal_distance);
-    let inv_ray_direction = 1.0 / ray_direction;
+    let inv_direction = 1.0 / ray_direction;
 
-    // BVH traversal algorythm copied from the Rust `bvh` crate
-    var index = 0u;
-    let max_length = 13u;
-    while index < max_length {
-        let node = bvh[index];
-        if node.entry_index == 0xffffffffu {
-            let object = objects[node.shape_index];
-            let transformed_origin = (object.inv_transform_matrix * vec4<f32>(camera.origin, 1.0)).xyz;
-            let transformed_direction = object.inv_rotation_matrix * ray_direction;
-            let inv_transformed_direction = 1.0 / transformed_direction;
+    let delta_dist = abs(inv_direction);
+    var grid_pos = vec3<i32>(floor(camera.origin));
+    let step = vec3<i32>(sign(ray_direction));
 
-            let intersection = ray_aabb_intersection(transformed_origin, inv_transformed_direction, object.local_aabb);
-            /*if !intersection.exists {
-                continue;
-            }*/
-            
-            if ray_intersects_aabb(transformed_origin, inv_transformed_direction, object.local_aabb) {
-                return vec4<f32>(0.2, 0.0, 0.6, 1.0);
+    let origin_fract = fract(camera.origin);
+
+    var side_dist_x = delta_dist.x * select(1.0 - origin_fract.x, origin_fract.x, ray_direction.x < 0.0);
+    var side_dist_y = delta_dist.y * select(1.0 - origin_fract.y, origin_fract.y, ray_direction.y < 0.0);
+    var side_dist_z = delta_dist.z * select(1.0 - origin_fract.z, origin_fract.z, ray_direction.z < 0.0);
+
+    let dist = 500u;
+    var last_step: u32;
+    var normal_id: u32;
+    for(var i: u32 = 0u; i < dist; i++) {
+        if side_dist_x < side_dist_y {
+            if side_dist_x < side_dist_z {
+                grid_pos.x += step.x;
+                last_step = 0u;
+                side_dist_x += delta_dist.x;
+            } else {
+                grid_pos.z += step.z;
+                last_step = 2u;
+                side_dist_z += delta_dist.z;
             }
-            index = node.exit_index;            
-        } else if ray_intersects_aabb(camera.origin, inv_ray_direction, node.aabb) {
-            index = node.entry_index;
+        } else if side_dist_y < side_dist_z {
+            grid_pos.y += step.y;
+            last_step = 1u;
+            side_dist_y += delta_dist.y;
         } else {
-            index = node.exit_index;
+            grid_pos.z += step.z;
+            last_step = 2u;
+            side_dist_z += delta_dist.z;
+        }
+    }
+    var normal: vec3<f32>;
+    switch last_step {
+        case 0u: {
+            if step.x > 0 {
+                normal = normal_left;
+            } else {
+                normal = normal_right;
+            }
+            break;
+        }
+        case 1u: {
+            if step.y > 0 {
+                normal = normal_down;
+            } else {
+                normal = normal_up;
+            }
+            break;
+        }   
+        case 2u: {
+            if step.z > 0 {
+                normal = normal_forward;
+            } else {
+                normal = normal_backward;
+            }
+            break;
+        } 
+        default: {
+
         }
     }
 
-        //if ray_intersects_aabb(camera.origin, inv_ray_direction, bvh[0].aabb) {
+        //if ray_intersects_aabb(camera.origin, inv_direction, bvh[0].aabb) {
         //    return vec4<f32>(1.0, 1.0, 0.0, 1.0);
         //}
 
-    // textureSample(texture, t_sampler, in.tex_pos)
-    return vec4<f32>(0.9, 0.9, 0.9, 1.0);
+    //return textureSample(texture, t_sampler, in.tex_pos);
+    let t = max(dot(-ray_direction, normal), 0.0);
+    return vec4<f32>(1.0 * t, 0.5 * t, 0.2 * t, 1.0);
 }
 
 struct RayAabbIntersection {
@@ -159,3 +205,32 @@ fn ray_intersects_aabb(ray_origin: vec3<f32>, inv_ray_direction: vec3<f32>, aabb
     }
     return true;
 }
+
+/*
+// BVH traversal algorythm copied from the Rust `bvh` crate
+var index = 0u;
+    let max_length = 13u;
+    while index < max_length {
+        let node = bvh[index];
+        if node.entry_index == 0xffffffffu {
+            let object = objects[node.shape_index];
+            let transformed_origin = (object.inv_transform_matrix * vec4<f32>(camera.origin, 1.0)).xyz;
+            let transformed_direction = object.inv_rotation_matrix * ray_direction;
+            let inv_transformed_direction = 1.0 / transformed_direction;
+
+            let intersection = ray_aabb_intersection(transformed_origin, inv_transformed_direction, object.local_aabb);
+            /*if !intersection.exists {
+                continue;
+            }*/
+            
+            if ray_intersects_aabb(transformed_origin, inv_transformed_direction, object.local_aabb) {
+                return vec4<f32>(0.2, 0.0, 0.6, 1.0);
+            }
+            index = node.exit_index;            
+        } else if ray_intersects_aabb(camera.origin, inv_ray_direction, node.aabb) {
+            index = node.entry_index;
+        } else {
+            index = node.exit_index;
+        }
+    }
+*/

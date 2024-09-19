@@ -24,7 +24,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
-const FPS_CAP: u32 = 60;
+const FPS_CAP: u32 = 6000;
 const CANVAS_WIDTH: u32 = 16 * 20;
 const CANVAS_HEIGHT: u32 = 9 * 20;
 const PHYSICS_TIMESTEP: f32 = 0.01;
