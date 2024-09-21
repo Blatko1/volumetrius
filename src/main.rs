@@ -11,6 +11,7 @@ use backend::ctx::Ctx;
 use backend::Canvas;
 use bvh::bounding_hierarchy::BoundingHierarchy;
 use camera::Camera;
+use chunk::Svo;
 use control::{ControllerSettings, GameInput};
 use nalgebra::Point3;
 use pollster::block_on;
@@ -26,8 +27,8 @@ use winit::{
 };
 
 const FPS_CAP: u32 = 6000;
-const CANVAS_WIDTH: u32 = 16 * 20;
-const CANVAS_HEIGHT: u32 = 9 * 20;
+const CANVAS_WIDTH: u32 = 16 * 1;
+const CANVAS_HEIGHT: u32 = 9 * 1;
 const PHYSICS_TIMESTEP: f32 = 0.01;
 const SLEEP_BETWEEN_FRAMES: bool = false;
 
@@ -188,7 +189,10 @@ fn main() {
         std::env::set_var("RUST_LOG", "error");
     }
     env_logger::init();
-
+    //let svo = Svo::new(1);
+    //println!("leafs: {}, nodes: {}", svo.leaf_count(), svo.node_count());
+    //svo.flatten();
+    //panic!();
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut state = State::new();

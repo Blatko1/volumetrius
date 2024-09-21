@@ -110,22 +110,22 @@ impl Canvas {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Main Bind Group Layout"),
             entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
+                //wgpu::BindGroupLayoutEntry {
+                //    binding: 0,
+                //    visibility: wgpu::ShaderStages::FRAGMENT,
+                //    ty: wgpu::BindingType::Texture {
+                //        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                //        view_dimension: wgpu::TextureViewDimension::D2,
+                //        multisampled: false,
+                //    },
+                //    count: None,
+                //},
+                //wgpu::BindGroupLayoutEntry {
+                //    binding: 1,
+                //    visibility: wgpu::ShaderStages::FRAGMENT,
+                //    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                //    count: None,
+                //},
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::VERTEX,
@@ -173,14 +173,14 @@ impl Canvas {
             label: Some("Main Bind Group"),
             layout: &bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
+                //wgpu::BindGroupEntry {
+                //    binding: 0,
+                //    resource: wgpu::BindingResource::TextureView(&view),
+                //},
+                //wgpu::BindGroupEntry {
+                //    binding: 1,
+                //    resource: wgpu::BindingResource::Sampler(&sampler),
+                //},
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: matrix_buffer.as_entire_binding(),
@@ -376,7 +376,7 @@ impl Canvas {
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        self.ctx.queue().write_texture(
+        /*self.ctx.queue().write_texture(
             wgpu::ImageCopyTexture {
                 texture: &self.texture,
                 mip_level: 0,
@@ -390,7 +390,7 @@ impl Canvas {
                 rows_per_image: None,
             },
             self.size,
-        );
+        );*/
 
         let mut encoder =
             self.ctx

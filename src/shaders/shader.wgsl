@@ -16,15 +16,15 @@ fn vs_main(@location(0) pos: vec2<f32>) -> VertexOutput {
     return out;   
 }
 
-@group(0) @binding(0)
-var texture: texture_2d<f32>;
-@group(0) @binding(1)
-var t_sampler: sampler;
+//@group(0) @binding(0)
+//var texture: texture_2d<f32>;
+//@group(0) @binding(1)
+//var t_sampler: sampler;
 
-@fragment
-fn old_fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(texture, t_sampler, in.tex_pos);
-}
+//@fragment
+//fn old_fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+//    return textureSample(texture, t_sampler, in.tex_pos);
+//}
 
 struct Aabb {
     min: vec3<f32>,
@@ -75,12 +75,13 @@ const normal_backward = vec3<f32>(0.0, 0.0, 1.0);
 struct Chunk {
     a: vec4<f32>
 }
+const epsilon = vec3<f32>(0.00001, 0.00001, 0.00001);
 const chunk_size = 32;
 const chunks_per_dimension = 10;
 const chunks_count = 1000;
 @group(1) @binding(0)
 var<uniform> chunks: array<Chunk, chunks_count>;
-
+// TODO transfering all types to float is faster????
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     
@@ -88,148 +89,115 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let pixel_x = frag_coord.x * 2.0 - 1.0;
     let pixel_y = 1.0 - frag_coord.y * 2.0; // turns y upside-down
     let ray_direction = normalize(pixel_x * camera.plane_h * camera.aspect_ratio + pixel_y * camera.plane_v + camera.direction * camera.focal_distance);
-    let inv_direction = 1.0 / ray_direction;
 
-    let delta_dist = abs(inv_direction);
+    let delta_dist = max(abs(1.0 / ray_direction), epsilon);
     let step = vec3<i32>(sign(ray_direction));
+    let fstep = sign(ray_direction);
     
     let origin_fract = fract(camera.origin);
-    let origin = vec3<i32>(floor(camera.origin));
-    var chunk_pos = vec3<i32>(0, 0, 0);
-    var voxel_pos = vec3<i32>(origin % chunk_size);
+    var global_pos = vec3<i32>(floor(camera.origin));
 
-    var dir_compare = vec3<bool>(ray_direction.x < 0.0, ray_direction.y < 0.0, ray_direction.z < 0.0);
-    var side_dist = delta_dist * select(1.0 - origin_fract, origin_fract, dir_compare);
+    let size = 1.0 * 0.5;
+    //var side_dist = delta_dist * select(1.0 - origin_fract, origin_fract, ray_direction < vec3<f32>(0.0));
+    var side_dist = -delta_dist * (fstep * (origin_fract - size) - size); 
 
     var x_overflow: i32;
-    var x_reset: i32;
-    var chunk_x_overflow: i32;
     if step.x > 0 {
-        x_overflow = chunk_size;
-        x_reset = 0;
-        chunk_x_overflow = chunks_per_dimension;
+        x_overflow = global_pos.x + (chunks_per_dimension + 1) * chunk_size;
     } else {
-        x_overflow = -1;
-        x_reset = chunk_size - 1;
-        chunk_x_overflow = -chunks_per_dimension - 1;
+        x_overflow = global_pos.x - chunks_per_dimension * chunk_size;
     }
 
     var y_overflow: i32;
-    var y_reset: i32;
-    var chunk_y_overflow: i32;
     if step.y > 0 {
-        y_overflow = chunk_size;
-        y_reset = 0;
-        chunk_y_overflow = chunks_per_dimension;
+        y_overflow = global_pos.y + (chunks_per_dimension + 1) * chunk_size;
     } else {
-        y_overflow = -1;
-        y_reset = chunk_size - 1;
-        chunk_y_overflow = -chunks_per_dimension - 1;
+        y_overflow = global_pos.y - chunks_per_dimension * chunk_size;
     }
 
     var z_overflow: i32;
-    var z_reset: i32;
-    var chunk_z_overflow: i32;
     if step.z > 0 {
-        z_overflow = chunk_size;
-        z_reset = 0;
-        chunk_z_overflow = chunks_per_dimension;
+        z_overflow = global_pos.z + (chunks_per_dimension + 1) * chunk_size;
     } else {
-        z_overflow = -1;
-        z_reset = chunk_size - 1;
-        chunk_z_overflow = -chunks_per_dimension - 1;
+        z_overflow = global_pos.z - chunks_per_dimension * chunk_size;
     }
+    let overflow = vec3<i32>(x_overflow, y_overflow, z_overflow);
 
-    var last_step: u32;
-    var normal_id: u32;
+    let marker = vec3<i32>(chunk_size - 10);
+    var mask: vec3<f32>;
     while true {
-        if voxel_pos.x == 2 && voxel_pos.y == 2 && voxel_pos.z == 2 {
+        //let aabb = bvh[0];
+        //voxel_pos = vec3<i32>(global_pos % chunk_size);
+        if all(vec3<i32>(global_pos % chunk_size) >= marker) {
             break;
         }
-        if side_dist.x < side_dist.y {
+        // Branchless DDA step! From shadertoy website: "Branchless Voxel Raycasting"
+        mask = step(side_dist.xyz, min(side_dist.yzx, side_dist.zxy));	
+		side_dist += mask * delta_dist;
+		global_pos += vec3<i32>(mask) * step;
+        if any(global_pos == overflow) {
+            mask = vec3<f32>(0.0);
+            break;
+        }
+
+        /*if side_dist.x < side_dist.y {
             if side_dist.x < side_dist.z {
-                voxel_pos.x += step.x;
-                if voxel_pos.x == x_overflow {
-                    chunk_pos.x += step.x;
-                    if chunk_pos.x == chunk_x_overflow {
-                        last_step = 3u;
-                        break;
-                    } 
-                    voxel_pos.x = x_reset;
+                global_pos.x += step.x;
+                if global_pos.x == x_overflow {
+                    mask = vec3<f32>(0.0);
+                    break;
                 }
-                last_step = 0u;
+                mask = vec3<f32>(1.0, 0.0, 0.0);
                 side_dist.x += delta_dist.x;
             } else {
-                voxel_pos.z += step.z;
-                if voxel_pos.z == z_overflow {
-                    chunk_pos.z += step.z;
-                    if chunk_pos.z == chunk_z_overflow {
-                        last_step = 3u;
-                        break;
-                    }
-                    voxel_pos.z = z_reset;
+                global_pos.z += step.z;
+                if global_pos.z == z_overflow {
+                    mask = vec3<f32>(0.0);
+                    break;
                 }
-                last_step = 2u;
+                mask = vec3<f32>(0.0, 0.0, 1.0);
                 side_dist.z += delta_dist.z;
             }
         } else if side_dist.y < side_dist.z {
-            voxel_pos.y += step.y;
-            if voxel_pos.y == y_overflow {
-                chunk_pos.y += step.y;
-                if chunk_pos.y == chunk_y_overflow {
-                    last_step = 3u;
-                    break;
-                } 
-                voxel_pos.y = y_reset;
+            global_pos.y += step.y;
+            if global_pos.y == y_overflow {
+                mask = vec3<f32>(0.0);
+                break;
             }
-            last_step = 1u;
+            mask = vec3<f32>(0.0, 1.0, 0.0);
             side_dist.y += delta_dist.y;
         } else {
-            voxel_pos.z += step.z;
-            if voxel_pos.z == z_overflow {
-                chunk_pos.z += step.z;
-                if chunk_pos.z == chunk_z_overflow {
-                    last_step = 3u;
-                    break;
-                } 
-                voxel_pos.z = z_reset;
+            global_pos.z += step.z;
+            if global_pos.z == z_overflow {
+                mask = vec3<f32>(0.0);
+                break;
             }
-            
-            last_step = 2u;
+            mask = vec3<f32>(0.0, 0.0, 1.0);
             side_dist.z += delta_dist.z;
-        }
+        }*/
     }
     var normal: vec3<f32>;
-    switch last_step {
-        case 0u: {
-            if step.x > 0 {
-                normal = normal_left;
-            } else {
-                normal = normal_right;
-            }
-            break;
+    if mask.x == 1.0 {
+        if step.x > 0 {
+            normal = normal_left;
+        } else {
+            normal = normal_right;
         }
-        case 1u: {
-            if step.y > 0 {
-                normal = normal_down;
-            } else {
-                normal = normal_up;
-            }
-            break;
-        }   
-        case 2u: {
-            if step.z > 0 {
-                normal = normal_forward;
-            } else {
-                normal = normal_backward;
-            }
-            break;
+    } else if mask.y == 1.0 {
+        if step.y > 0 {
+            normal = normal_down;
+        } else {
+            normal = normal_up;
         }
-        default: {
-            return vec4<f32>(0.0, 0.0, 0.5, 1.0);
+    } else if mask.z == 1.0 {
+        if step.z > 0 {
+            normal = normal_forward;
+        } else {
+            normal = normal_backward;
         }
+    } else {
+        return vec4<f32>(0.1, 0.2, 0.3, 1.0);
     }
-
         //if ray_intersects_aabb(camera.origin, inv_direction, bvh[0].aabb) {
         //    return vec4<f32>(1.0, 1.0, 0.0, 1.0);
         //}
