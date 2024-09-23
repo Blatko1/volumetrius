@@ -137,11 +137,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     svo3.valid_mask = 9u; // 0b00001001
     svo3.leaf_mask = 9u;  // 0b00001001
     octree[2] = svo3;
-
+    
     var camera_origin = camera.origin;
     var old_side_dist: vec3<f32>;
     var current_depth = 0u;
-    var local_pos = vec3<i32>(vec3<i32>(floored_global_pos) % i32(chunk_size));
+    var local_pos = vec3<i32>(vec3<i32>(floor(camera_origin)) % i32(chunk_size));
     //let voxel_index = (local_pos.y * u32(chunk_size) + local_pos.z) * u32(chunk_size) + local_pos.x;
     // 16 -> 0b10000
     var pointer = 0u;
@@ -160,8 +160,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             if u32(node.valid_mask & index) != 0u {
                 // Check if hit node is leaf
                 if u32(node.leaf_mask & index) != 0u {
-                    break;
-                    //return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+                    //break;
+                    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
                 }
                 var saved_node: SavedNode;
                 saved_node.node = node;
@@ -179,18 +179,29 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 //voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> current_depth)) >> vec3<u32>(4u - current_depth));
                 let pos_fract = floored_global_pos - size * floor(floored_global_pos/size);
                 side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
-                continue;
+                //break;
             } else {
                 mask = step(side_dist.xyz, min(side_dist.yzx, side_dist.zxy));
                 // vec3<f32>(vec3<i32>(global_pos) - ((vec3<i32>(global_pos) % vec3<i32>(size/2.0)) * vec3<i32>(mask)) + vec3<i32>(mask * step * size/2.0))
                 //global_pos += ray_direction * dot(side_dist, mask) /*- mask * step * size*/;
                 //let origin_offset = (vec3<i32>(floored_global_pos) % vec3<i32>(size)) * vec3<i32>(mask);
-                floored_global_pos += vec3<f32>(mask * step * size);
-                camera_origin += mask * step * size;
+                //floored_global_pos += vec3<f32>(mask * step * size);
+                //camera_origin += mask * step * size;
+                camera_origin += ray_direction * (dot(side_dist, mask));
+                /*if mask.x == 1.0 {
+                    camera_origin.x = round(camera_origin.x);
+                } else if mask.y == 1.0 {
+                    camera_origin.y = round(camera_origin.y);
+                } else if mask.z == 1.0 {
+                    camera_origin.z = round(camera_origin.z);
+                }*/
                 //if true {
                 //return vec4<f32>(global_pos / 32.0, 1.0);
                 //}
-                if (any(floored_global_pos >= vec3<f32>(32.0)) || any(floored_global_pos < vec3<f32>(0.0))) {
+                if (any(camera_origin >= vec3<f32>(32.0)) || any(camera_origin < vec3<f32>(-32.0))) && false  {
+                    if true {
+                        return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+                    }
                     if pointer == 0u {
                         continue;
                     }
@@ -198,12 +209,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                     current_depth -= 1u;
                     pointer -= 1u;
                     let saved_node = stack[pointer];
-                    side_dist = saved_node.side_dist;
+                    //side_dist = saved_node.side_dist;
                     //let pos_fract = floored_global_pos - size * floor(floored_global_pos/size);
                     //side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
                     node = saved_node.node;
-                    mask = step(side_dist.xyz, min(side_dist.yzx, side_dist.zxy));
-                    side_dist += mask * delta_dist * size;
+                    let pos_fract = camera_origin - size * floor(camera_origin/size);
+                    side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
+                    //mask = step(side_dist.xyz, min(side_dist.yzx, side_dist.zxy));
+                    //side_dist += mask * delta_dist * size;
                     //node = octree[0];
                     //local_pos = vec3<i32>(vec3<i32>(global_pos) % i32(chunk_size));
                     //voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> current_depth)) >> vec3<u32>(4u - current_depth));
@@ -212,11 +225,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 } else {
                     //side_dist += mask * delta_dist;
                     //let fract = vec3<f32>(vec3<i32>(camera.origin) % i32(size * 0.5))+fract(camera.origin);
-                    side_dist += mask * delta_dist * size;
-                    //let pos_fract = camera_origin - size * floor(camera_origin/size);
-                    //let o_side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
+                    //side_dist += mask * delta_dist * size;
+                    let pos_fract = camera_origin - size * floor(camera_origin/size);
+                    side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
+
                     //return vec4<f32>(side_dist - o_side_dist, 1.0);
-                    local_pos = vec3<i32>(vec3<i32>(floored_global_pos) % i32(chunk_size));
+                    local_pos = vec3<i32>(vec3<i32>(floor(camera_origin)) % i32(chunk_size));
                 }
             }
         }
