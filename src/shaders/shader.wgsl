@@ -76,65 +76,243 @@ struct Chunk {
     a: vec4<f32>
 }
 const epsilon = vec3<f32>(0.00001, 0.00001, 0.00001);
-const chunk_size = 32;
-const chunks_per_dimension = 10;
+const chunk_size = 32.0;
+const chunks_per_dimension = 10.0;
 const chunks_count = 1000;
 @group(1) @binding(0)
 var<uniform> chunks: array<Chunk, chunks_count>;
+
+struct Node {
+    child_index: u32,
+    valid_mask: u32,
+    leaf_mask: u32
+}
+
+struct SparseVoxelOctrees {
+    svos: array<Node>
+}
+
+@group(1) @binding(1)
+var<storage, read> octrees: SparseVoxelOctrees;
+
+struct SavedNode {
+    node: Node,
+    side_dist: vec3<f32>
+}
+
 // TODO transfering all types to float is faster????
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    
     let frag_coord = in.clip_position.xy / vec2<f32>(camera.screen_width, camera.screen_height);
     let pixel_x = frag_coord.x * 2.0 - 1.0;
     let pixel_y = 1.0 - frag_coord.y * 2.0; // turns y upside-down
     let ray_direction = normalize(pixel_x * camera.plane_h * camera.aspect_ratio + pixel_y * camera.plane_v + camera.direction * camera.focal_distance);
 
-    let delta_dist = max(abs(1.0 / ray_direction), epsilon);
-    let step = vec3<i32>(sign(ray_direction));
-    let fstep = sign(ray_direction);
+    let delta_dist = 1.0 / max(abs(ray_direction), epsilon);
+    let step = sign(ray_direction);
     
-    let origin_fract = fract(camera.origin);
-    var global_pos = vec3<i32>(floor(camera.origin));
+    var size = 32.0 * 0.5;
+    //let pos_fract = fract(camera.origin);
+    let pos_fract = camera.origin - size * floor(camera.origin/size);
+    var global_pos = camera.origin;
+    var floored_global_pos = floor(camera.origin);
 
-    let size = 1.0 * 0.5;
     //var side_dist = delta_dist * select(1.0 - origin_fract, origin_fract, ray_direction < vec3<f32>(0.0));
-    var side_dist = -delta_dist * (fstep * (origin_fract - size) - size); 
+    //let fract = vec3<f32>(vec3<i32>(camera.origin) % i32(size * 0.5))+fract(camera.origin);
+    var side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
 
-    var x_overflow: i32;
-    if step.x > 0 {
-        x_overflow = global_pos.x + (chunks_per_dimension + 1) * chunk_size;
-    } else {
-        x_overflow = global_pos.x - chunks_per_dimension * chunk_size;
+    var svo1: Node;
+    var svo2: Node;
+    var svo3: Node;
+    var octree: array<Node, 3>;
+    svo1.child_index = 1u;
+    svo1.valid_mask = 8u; // 0b00001000
+    svo1.leaf_mask = 0u;  // 0b00000000
+    octree[0] = svo1;
+    svo2.child_index = 0u;
+    svo2.valid_mask = 144u; // 0b10010000
+    svo2.leaf_mask = 144u;  // 0b10010000
+    octree[1] = svo2;
+    svo3.child_index = 0u;
+    svo3.valid_mask = 9u; // 0b00001001
+    svo3.leaf_mask = 9u;  // 0b00001001
+    octree[2] = svo3;
+
+    var camera_origin = camera.origin;
+    var old_side_dist: vec3<f32>;
+    var current_depth = 0u;
+    var local_pos = vec3<i32>(vec3<i32>(floored_global_pos) % i32(chunk_size));
+    //let voxel_index = (local_pos.y * u32(chunk_size) + local_pos.z) * u32(chunk_size) + local_pos.x;
+    // 16 -> 0b10000
+    var pointer = 0u;
+    var stack: array<SavedNode, 30>;
+    var node = octree[0];
+    var mask: vec3<f32>;
+    for(var i = 0; i < 50; i++) {
+        if node.valid_mask != 0u && current_depth < 5u {
+            let voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> current_depth)) >> vec3<u32>(4u - current_depth));
+            //return vec4<f32>(vec3<f32>(voxel_pos), 1.0);
+            let child_id = u32(voxel_pos.y << 2u | voxel_pos.z << 1u | voxel_pos.x);
+            let index = 1u << child_id;
+            //return vec4<f32>(f32(index) / 128.0, 0.0, 0.0, 1.0);
+
+            // Check if hit node is valid
+            if u32(node.valid_mask & index) != 0u {
+                // Check if hit node is leaf
+                if u32(node.leaf_mask & index) != 0u {
+                    break;
+                    //return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+                }
+                var saved_node: SavedNode;
+                saved_node.node = node;
+                saved_node.side_dist = side_dist;
+                stack[pointer] = saved_node;
+                pointer += 1u;
+                size *= 0.5;
+                current_depth += 1u;
+                let child_offset = countOneBits(node.valid_mask << (32u - child_id));
+                let child_index = child_offset + node.child_index;
+                node = octree[child_index];
+                /*if child_index == 1u {
+                    return vec4<f32>(0.0, 0.0, 1.0, 1.0);
+                }*/
+                //voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> current_depth)) >> vec3<u32>(4u - current_depth));
+                let pos_fract = floored_global_pos - size * floor(floored_global_pos/size);
+                side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
+                continue;
+            } else {
+                mask = step(side_dist.xyz, min(side_dist.yzx, side_dist.zxy));
+                // vec3<f32>(vec3<i32>(global_pos) - ((vec3<i32>(global_pos) % vec3<i32>(size/2.0)) * vec3<i32>(mask)) + vec3<i32>(mask * step * size/2.0))
+                //global_pos += ray_direction * dot(side_dist, mask) /*- mask * step * size*/;
+                //let origin_offset = (vec3<i32>(floored_global_pos) % vec3<i32>(size)) * vec3<i32>(mask);
+                floored_global_pos += vec3<f32>(mask * step * size);
+                camera_origin += mask * step * size;
+                //if true {
+                //return vec4<f32>(global_pos / 32.0, 1.0);
+                //}
+                if (any(floored_global_pos >= vec3<f32>(32.0)) || any(floored_global_pos < vec3<f32>(0.0))) {
+                    if pointer == 0u {
+                        continue;
+                    }
+                    size *= 2.0;
+                    current_depth -= 1u;
+                    pointer -= 1u;
+                    let saved_node = stack[pointer];
+                    side_dist = saved_node.side_dist;
+                    //let pos_fract = floored_global_pos - size * floor(floored_global_pos/size);
+                    //side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
+                    node = saved_node.node;
+                    mask = step(side_dist.xyz, min(side_dist.yzx, side_dist.zxy));
+                    side_dist += mask * delta_dist * size;
+                    //node = octree[0];
+                    //local_pos = vec3<i32>(vec3<i32>(global_pos) % i32(chunk_size));
+                    //voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> current_depth)) >> vec3<u32>(4u - current_depth));
+                    //return vec4<f32>(vec3<f32>(voxel_pos), 1.0);
+                    //return vec4<f32>(0.0, 1.0, 0.0, 1.0);
+                } else {
+                    //side_dist += mask * delta_dist;
+                    //let fract = vec3<f32>(vec3<i32>(camera.origin) % i32(size * 0.5))+fract(camera.origin);
+                    side_dist += mask * delta_dist * size;
+                    //let pos_fract = camera_origin - size * floor(camera_origin/size);
+                    //let o_side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
+                    //return vec4<f32>(side_dist - o_side_dist, 1.0);
+                    local_pos = vec3<i32>(vec3<i32>(floored_global_pos) % i32(chunk_size));
+                }
+            }
+        }
+        //return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+        /*if current_depth == 0u {
+            return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+        }
+        // TODO Maybe could remove '==index'
+        /*if u32(node.valid_mask & index) != 0u {
+            if u32(node.leaf_mask & index) != 0u {
+                return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+            }
+            let child_offset = countOneBits(node.valid_mask << (32u - child_id));
+            node = octree[child_offset + node.child_index];
+            size *= 0.5;
+            current_depth += 1u;
+            voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> current_depth)) >> vec3<u32>(4u - current_depth));
+            side_dist = -delta_dist * (step * (abs(camera.origin % size) - size * 0.5) - size * 0.5);
+            /*if current_depth == 1u && all(voxel_pos == vec3<i32>(1, 0, 0)) {
+                return vec4<f32>(0.0, 0.1, 0.5, 1.0);
+            }*/
+            //return vec4<f32>(vec3<f32>(voxel_pos), 1.0);
+            continue;
+        }*/
+
+        // Branchless DDA! From shadertoy website: "Branchless Voxel Raycasting"
+        mask = step(side_dist.xyz, min(side_dist.yzx, side_dist.zxy));
+        let old_global = vec3<i32>(global_pos) - (vec3<i32>(global_pos) % vec3<i32>(size*2.0));
+        global_pos = vec3<f32>(vec3<i32>(global_pos) - ((vec3<i32>(global_pos) % vec3<i32>(size)) * vec3<i32>(mask)) + vec3<i32>(mask * step * size));
+        //return 
+        //any(abs(global_pos) > (vec3<f32>(abs(old_global)) + (size*2.0)))
+        if any(global_pos > vec3<f32>(31.0)) {
+            return vec4<f32>(0.0, 1.0, 0.0, 1.0);
+        } else {
+            side_dist += mask * delta_dist;
+            local_pos = vec3<i32>(vec3<i32>(global_pos) % i32(chunk_size));
+        }
+        /*let step_mask = vec3<i32>(mask * step);
+        let old_pos = voxel_pos;
+        voxel_pos += step_mask;
+        // Check if the ray is still positioned in the parent when advanced
+        if all((old_pos ^ step_mask) == voxel_pos) {
+		    side_dist += mask * delta_dist;
+		    global_pos = vec3<f32>(vec3<i32>(global_pos) - (vec3<i32>(global_pos) % vec3<i32>(size)*vec3<i32>(mask)) + vec3<i32>(mask * step * size));
+            local_pos = vec3<i32>(vec3<i32>(global_pos) % i32(chunk_size));
+            let anew_voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> current_depth)) >> vec3<u32>(4u - current_depth));
+            /*if !all(voxel_pos == anew_voxel_pos) {
+                return vec4<f32>(vec3<f32>(voxel_pos), 1.0);
+            }*/
+            //return vec4<f32>(vec3<f32>(global_pos / 32.0), 1.0);
+            //return vec4<f32>(global_pos / 16.0, 1.0);
+        } else {
+            size *= 2.0;
+            current_depth -= 1u;
+            //voxel_pos = local_pos & vec3<i32>(0x10000i >> current_depth);
+            
+            side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
+            node = octree[0];
+            return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+        }*/*/
     }
 
-    var y_overflow: i32;
-    if step.y > 0 {
-        y_overflow = global_pos.y + (chunks_per_dimension + 1) * chunk_size;
+    /*var x_overflow = global_pos.x;
+    if step.x > 0.0 {
+        x_overflow += (chunks_per_dimension + 1.0) * chunk_size;
     } else {
-        y_overflow = global_pos.y - chunks_per_dimension * chunk_size;
+        x_overflow -= chunks_per_dimension * chunk_size;
     }
 
-    var z_overflow: i32;
-    if step.z > 0 {
-        z_overflow = global_pos.z + (chunks_per_dimension + 1) * chunk_size;
+    var y_overflow = global_pos.y;
+    if step.y > 0.0 {
+        y_overflow += (chunks_per_dimension + 1.0) * chunk_size;
     } else {
-        z_overflow = global_pos.z - chunks_per_dimension * chunk_size;
+        y_overflow -= chunks_per_dimension * chunk_size;
     }
-    let overflow = vec3<i32>(x_overflow, y_overflow, z_overflow);
 
-    let marker = vec3<i32>(chunk_size - 10);
+    var z_overflow = global_pos.z;
+    if step.z > 0.0 {
+        z_overflow += (chunks_per_dimension + 1.0) * chunk_size;
+    } else {
+        z_overflow -= chunks_per_dimension * chunk_size;
+    }
+    let overflow = vec3<f32>(x_overflow, y_overflow, z_overflow);
+
+    let marker = vec3<i32>(chunk_size - 20.0);
     var mask: vec3<f32>;
     while true {
         //let aabb = bvh[0];
         //voxel_pos = vec3<i32>(global_pos % chunk_size);
-        if all(vec3<i32>(global_pos % chunk_size) >= marker) {
+        if all(vec3<i32>(vec3<i32>(global_pos) % i32(chunk_size)) >= marker) {
             break;
         }
-        // Branchless DDA step! From shadertoy website: "Branchless Voxel Raycasting"
+        // Branchless DDA! From shadertoy website: "Branchless Voxel Raycasting"
         mask = step(side_dist.xyz, min(side_dist.yzx, side_dist.zxy));	
 		side_dist += mask * delta_dist;
-		global_pos += vec3<i32>(mask) * step;
+		global_pos += mask * step;
         if any(global_pos == overflow) {
             mask = vec3<f32>(0.0);
             break;
@@ -175,22 +353,22 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             mask = vec3<f32>(0.0, 0.0, 1.0);
             side_dist.z += delta_dist.z;
         }*/
-    }
+    }*/
     var normal: vec3<f32>;
     if mask.x == 1.0 {
-        if step.x > 0 {
+        if step.x > 0.0 {
             normal = normal_left;
         } else {
             normal = normal_right;
         }
     } else if mask.y == 1.0 {
-        if step.y > 0 {
+        if step.y > 0.0 {
             normal = normal_down;
         } else {
             normal = normal_up;
         }
     } else if mask.z == 1.0 {
-        if step.z > 0 {
+        if step.z > 0.0 {
             normal = normal_forward;
         } else {
             normal = normal_backward;
