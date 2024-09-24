@@ -82,6 +82,7 @@ impl Camera {
         self.fov = (self.fov - delta_fov).clamp(FOV_MIN, FOV_MAX);
         self.focal_distance = 1.0 / (self.fov * 0.5).tan();
         println!("origin: {}", self.origin);
+        //println!("dir: {}", self.dir);
     }
 
     pub fn get_global_matrix(&mut self, config: &wgpu::SurfaceConfiguration) -> Matrix4<f32> {

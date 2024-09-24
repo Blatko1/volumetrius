@@ -75,10 +75,11 @@ const normal_backward = vec3<f32>(0.0, 0.0, 1.0);
 struct Chunk {
     a: vec4<f32>
 }
-const epsilon = vec3<f32>(0.00001, 0.00001, 0.00001);
+const epsilon = vec3<f32>(0.000001, 0.000001, 0.000001);
 const chunk_size = 32.0;
 const chunks_per_dimension = 10.0;
 const chunks_count = 1000;
+const max_depth = 8u;
 @group(1) @binding(0)
 var<uniform> chunks: array<Chunk, chunks_count>;
 
@@ -97,211 +98,152 @@ var<storage, read> octrees: SparseVoxelOctrees;
 
 struct SavedNode {
     node: Node,
-    side_dist: vec3<f32>
+    voxel_pos: vec3<i32>
+}
+
+// CPU TESTED. IS CORRECT
+fn modulo(a: vec3<f32>, b: f32, step: vec3<f32>) -> vec3<f32> {
+    var _a = a;
+    _a = -step * (b*0.5 - a) + b*0.5;
+    //return _a - b * floor(_a / b);
+    return ((_a % b) + b) % b;
 }
 
 // TODO transfering all types to float is faster????
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    var svo1: Node;
+    var svo2: Node;
+    var svo3: Node;
+    var svo4: Node;
+    var svo5: Node;
+    var svo6: Node;
+    var octree: array<Node, 6>;
+    svo1.child_index = 1u;
+    svo1.valid_mask = 32u; // 0b00100000
+    svo1.leaf_mask = 0u;  // 0b00000000
+    octree[0] = svo1;
+    svo2.child_index = 3u;
+    svo2.valid_mask = 56u; // 0b00111000
+    svo2.leaf_mask = 24u;  // 0b00011000
+    octree[1] = svo2;
+    svo3.child_index = 0u;
+    svo3.valid_mask = 80u; // 0b01010000
+    svo3.leaf_mask = 80u;  // 0b01010000
+    octree[2] = svo3;
+    svo4.child_index = 4u;
+    svo4.valid_mask = 17u; // 0b00010001
+    svo4.leaf_mask = 1u;   // 0b00000001
+    octree[3] = svo4;
+    svo5.child_index = 5u;
+    svo5.valid_mask = 17u; // 0b00010001
+    svo5.leaf_mask = 1u;   // 0b00000001
+    octree[4] = svo5;
+    svo6.child_index = 0u;
+    svo6.valid_mask = 129u; // 0b10000001
+    svo6.leaf_mask = 129u;  // 0b10000001
+    octree[5] = svo6;
+
     let frag_coord = in.clip_position.xy / vec2<f32>(camera.screen_width, camera.screen_height);
     let pixel_x = frag_coord.x * 2.0 - 1.0;
     let pixel_y = 1.0 - frag_coord.y * 2.0; // turns y upside-down
     let ray_direction = normalize(pixel_x * camera.plane_h * camera.aspect_ratio + pixel_y * camera.plane_v + camera.direction * camera.focal_distance);
-
     let delta_dist = 1.0 / max(abs(ray_direction), epsilon);
     let step = sign(ray_direction);
-    
-    var size = 32.0 * 0.5;
-    //let pos_fract = fract(camera.origin);
-    let pos_fract = camera.origin - size * floor(camera.origin/size);
-    var global_pos = camera.origin;
-    var floored_global_pos = floor(camera.origin);
+    var size = 32.0;
+    var position = camera.origin;
+    let should_floor = 0.5 * (1.0 - step);
 
-    //var side_dist = delta_dist * select(1.0 - origin_fract, origin_fract, ray_direction < vec3<f32>(0.0));
-    //let fract = vec3<f32>(vec3<i32>(camera.origin) % i32(size * 0.5))+fract(camera.origin);
-    var side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
+    //var side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
+    size *= 0.5;
+    //let pos_fract = modulo(position, size, step);
+    //var side_dist = delta_dist * (size - pos_fract);
 
-    var svo1: Node;
-    var svo2: Node;
-    var svo3: Node;
-    var octree: array<Node, 3>;
-    svo1.child_index = 1u;
-    svo1.valid_mask = 8u; // 0b00001000
-    svo1.leaf_mask = 0u;  // 0b00000000
-    octree[0] = svo1;
-    svo2.child_index = 0u;
-    svo2.valid_mask = 144u; // 0b10010000
-    svo2.leaf_mask = 144u;  // 0b10010000
-    octree[1] = svo2;
-    svo3.child_index = 0u;
-    svo3.valid_mask = 9u; // 0b00001001
-    svo3.leaf_mask = 9u;  // 0b00001001
-    octree[2] = svo3;
-    
-    var camera_origin = camera.origin;
-    var old_side_dist: vec3<f32>;
-    var current_depth = 0u;
-    var local_pos = vec3<i32>(vec3<i32>(floor(camera_origin)) % i32(chunk_size));
-    //let voxel_index = (local_pos.y * u32(chunk_size) + local_pos.z) * u32(chunk_size) + local_pos.x;
-    // 16 -> 0b10000
-    var pointer = 0u;
-    var stack: array<SavedNode, 30>;
-    var node = octree[0];
+    //let offset = modulo(position, size, step) - size;
+    //let floored_pos = position + offset * 0.5 * (1.0 - step);
+    //var local_pos = ((floored_pos % chunk_size) + chunk_size) % chunk_size;
+
+    var acc_dist = 0.0;
+    var stack: array<SavedNode, max_depth>;
     var mask: vec3<f32>;
-    for(var i = 0; i < 50; i++) {
-        if node.valid_mask != 0u && current_depth < 5u {
-            let voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> current_depth)) >> vec3<u32>(4u - current_depth));
-            //return vec4<f32>(vec3<f32>(voxel_pos), 1.0);
-            let child_id = u32(voxel_pos.y << 2u | voxel_pos.z << 1u | voxel_pos.x);
-            let index = 1u << child_id;
-            //return vec4<f32>(f32(index) / 128.0, 0.0, 0.0, 1.0);
-
-            // Check if hit node is valid
-            if u32(node.valid_mask & index) != 0u {
-                // Check if hit node is leaf
-                if u32(node.leaf_mask & index) != 0u {
-                    //break;
-                    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
-                }
-                /*var saved_node: SavedNode;
-                saved_node.node = node;
-                saved_node.side_dist = side_dist;
-                stack[pointer] = saved_node;
-                pointer += 1u;*/
-                size *= 0.5;
-                current_depth += 1u;
-                let child_offset = countOneBits(node.valid_mask << (32u - child_id));
-                let child_index = child_offset + node.child_index;
-                node = octree[child_index];
-                /*if child_index == 1u {
-                    return vec4<f32>(0.0, 0.0, 1.0, 1.0);
-                }*/
-                //voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> current_depth)) >> vec3<u32>(4u - current_depth));
-                let pos_fract = floored_global_pos - size * floor(floored_global_pos/size);
-                side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
-                //break;
-            } else {
-                mask = step(side_dist.xyz, min(side_dist.yzx, side_dist.zxy));
-                // vec3<f32>(vec3<i32>(global_pos) - ((vec3<i32>(global_pos) % vec3<i32>(size/2.0)) * vec3<i32>(mask)) + vec3<i32>(mask * step * size/2.0))
-                //global_pos += ray_direction * dot(side_dist, mask) /*- mask * step * size*/;
-                //let origin_offset = (vec3<i32>(floored_global_pos) % vec3<i32>(size)) * vec3<i32>(mask);
-                //floored_global_pos += vec3<f32>(mask * step * size);
-                //camera_origin += mask * step * size;
-                let pos_fract = camera_origin - size * floor(camera_origin/size);
-                if mask.x == 1.0 {
-                    camera_origin.x -= step.x * (step.x * (pos_fract.x - size * 0.5) - size * 0.5);
-                    camera_origin.x = round(camera_origin.x);
-                    camera_origin.z += ray_direction.z * side_dist.x;
-                    camera_origin.y += ray_direction.y * side_dist.x;
-                } 
-                if mask.y == 1.0 {
-                    camera_origin.x += ray_direction.x * side_dist.y;
-                    camera_origin.z += ray_direction.z * side_dist.y;
-                    camera_origin.y -= step.y *(step.y * (pos_fract.y - size * 0.5) - size * 0.5);
-                    camera_origin.y = round(camera_origin.y);
-                } 
-                if mask.z == 1.0 {
-                    camera_origin.x += ray_direction.x * side_dist.z;
-                    camera_origin.z -= step.z *(step.z * (pos_fract.z - size * 0.5) - size * 0.5);
-                    camera_origin.z = round(camera_origin.z);
-                    camera_origin.y += ray_direction.y * side_dist.z;
-                }
-                //if true {
-                //return vec4<f32>(global_pos / 32.0, 1.0);
-                //}
-                if (any(camera_origin >= vec3<f32>(32.0)) || any(camera_origin < vec3<f32>(-32.0))) && false  {
-                    /*if true {
-                        return vec4<f32>(0.0, 0.0, 0.0, 1.0);
-                    }
-                    if pointer == 0u {
-                        continue;
-                    }
-                    size *= 2.0;
-                    current_depth -= 1u;
-                    pointer -= 1u;
-                    let saved_node = stack[pointer];
-                    //side_dist = saved_node.side_dist;
-                    //let pos_fract = floored_global_pos - size * floor(floored_global_pos/size);
-                    //side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
-                    node = saved_node.node;
-                    let pos_fract = camera_origin - size * floor(camera_origin/size);
-                    side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
-                    */  //mask = step(side_dist.xyz, min(side_dist.yzx, side_dist.zxy));
-                    //side_dist += mask * delta_dist * size;
-                    //node = octree[0];
-                    //local_pos = vec3<i32>(vec3<i32>(global_pos) % i32(chunk_size));
-                    //voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> current_depth)) >> vec3<u32>(4u - current_depth));
-                    //return vec4<f32>(vec3<f32>(voxel_pos), 1.0);
-                    //return vec4<f32>(0.0, 1.0, 0.0, 1.0);
-                } else {
-                    //side_dist += mask * delta_dist;
-                    //let fract = vec3<f32>(vec3<i32>(camera.origin) % i32(size * 0.5))+fract(camera.origin);
-                    //side_dist += mask * delta_dist * size;
-                    let pos_fract = camera_origin - size * floor(camera_origin/size);
-                    side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
-
-                    //return vec4<f32>(side_dist - o_side_dist, 1.0);
-                    local_pos = vec3<i32>(vec3<i32>(floor(camera_origin)) % i32(chunk_size));
-                }
-            }
+    var node = octree[0];
+    var depth = 0u;
+    for(var i = 0; i < 200; i++) {
+        if acc_dist > 400.0 {
+            return vec4<f32>(0.1, 0.2, 0.3, 1.0);
         }
-        //return vec4<f32>(0.0, 0.0, 0.0, 1.0);
-        /*if current_depth == 0u {
-            return vec4<f32>(1.0, 0.0, 0.0, 1.0);
-        }
-        // TODO Maybe could remove '==index'
-        /*if u32(node.valid_mask & index) != 0u {
-            if u32(node.leaf_mask & index) != 0u {
-                return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+        let pos_fract = modulo(position, size, step);
+        //let offset = pos_fract - size;
+        let floored_pos = position + (pos_fract - size) * should_floor;
+        // Using this method since it can go over the 'chunk_size'
+        let local_pos = ((floored_pos % chunk_size) + chunk_size) % chunk_size;
+        let voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> depth)) >> vec3<u32>(4u - depth));
+        let voxel_index = u32(voxel_pos.y << 2u | voxel_pos.z << 1u | voxel_pos.x);
+        // 128 -> 0b10000000
+        let pos_mask = 128u >> voxel_index;
+        if (node.valid_mask & pos_mask) != 0u {
+            if (node.leaf_mask & pos_mask) != 0u {
+                break;
             }
-            let child_offset = countOneBits(node.valid_mask << (32u - child_id));
-            node = octree[child_offset + node.child_index];
+            stack[depth] = SavedNode(node, voxel_pos);
             size *= 0.5;
-            current_depth += 1u;
-            voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> current_depth)) >> vec3<u32>(4u - current_depth));
-            side_dist = -delta_dist * (step * (abs(camera.origin % size) - size * 0.5) - size * 0.5);
-            /*if current_depth == 1u && all(voxel_pos == vec3<i32>(1, 0, 0)) {
-                return vec4<f32>(0.0, 0.1, 0.5, 1.0);
-            }*/
-            //return vec4<f32>(vec3<f32>(voxel_pos), 1.0);
-            continue;
-        }*/
-
-        // Branchless DDA! From shadertoy website: "Branchless Voxel Raycasting"
-        mask = step(side_dist.xyz, min(side_dist.yzx, side_dist.zxy));
-        let old_global = vec3<i32>(global_pos) - (vec3<i32>(global_pos) % vec3<i32>(size*2.0));
-        global_pos = vec3<f32>(vec3<i32>(global_pos) - ((vec3<i32>(global_pos) % vec3<i32>(size)) * vec3<i32>(mask)) + vec3<i32>(mask * step * size));
-        //return 
-        //any(abs(global_pos) > (vec3<f32>(abs(old_global)) + (size*2.0)))
-        if any(global_pos > vec3<f32>(31.0)) {
-            return vec4<f32>(0.0, 1.0, 0.0, 1.0);
-        } else {
-            side_dist += mask * delta_dist;
-            local_pos = vec3<i32>(vec3<i32>(global_pos) % i32(chunk_size));
-        }
-        /*let step_mask = vec3<i32>(mask * step);
-        let old_pos = voxel_pos;
-        voxel_pos += step_mask;
-        // Check if the ray is still positioned in the parent when advanced
-        if all((old_pos ^ step_mask) == voxel_pos) {
-		    side_dist += mask * delta_dist;
-		    global_pos = vec3<f32>(vec3<i32>(global_pos) - (vec3<i32>(global_pos) % vec3<i32>(size)*vec3<i32>(mask)) + vec3<i32>(mask * step * size));
-            local_pos = vec3<i32>(vec3<i32>(global_pos) % i32(chunk_size));
-            let anew_voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> current_depth)) >> vec3<u32>(4u - current_depth));
-            /*if !all(voxel_pos == anew_voxel_pos) {
-                return vec4<f32>(vec3<f32>(voxel_pos), 1.0);
-            }*/
-            //return vec4<f32>(vec3<f32>(global_pos / 32.0), 1.0);
-            //return vec4<f32>(global_pos / 16.0, 1.0);
-        } else {
-            size *= 2.0;
-            current_depth -= 1u;
-            //voxel_pos = local_pos & vec3<i32>(0x10000i >> current_depth);
+            depth += 1u;
             
-            side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
-            node = octree[0];
-            return vec4<f32>(0.0, 0.0, 0.0, 1.0);
-        }*/*/
+            let child_offset = countOneBits(node.valid_mask >> (7u - voxel_index)) - 1u;
+            let child_index = child_offset + node.child_index;
+            node = octree[child_index];
+        } else {
+            let side_dist = delta_dist * (size - pos_fract);
+            mask = step(side_dist.xyz, min(side_dist.yzx, side_dist.zxy));
+            let move_dist = dot(mask, side_dist);
+            position += ray_direction * move_dist;
+            position = round(position) * mask + position * (1.0 - mask);
+            acc_dist += move_dist;
+            /*mask = vec3<f32>(0.0);
+            if side_dist.x < side_dist.y {
+                if side_dist.x < side_dist.z {
+                    position += ray_direction * side_dist.x;
+                    position.x = round(position.x);
+                    mask.x = 1.0;
+                } else {
+                    position += ray_direction * side_dist.z;
+                    position.z = round(position.z);
+                    mask.z = 1.0;
+                }
+            } else if side_dist.y < side_dist.z {
+                position += ray_direction * side_dist.y;
+                position.y = round(position.y);
+                mask.y = 1.0;
+            } else {
+                position += ray_direction * side_dist.z;
+                position.z = round(position.z);
+                mask.z = 1.0;
+            }*/
+            let step_mask = mask * step;
+            let new_pos = voxel_pos + vec3<i32>(step_mask);
+            let pos_check = voxel_pos ^ vec3<i32>(mask);
+            if any(new_pos != pos_check) && depth > 0u {
+                var octree_exited = true;
+                for(var j = 0u; j<depth; j++) {
+                    size *= 2.0;
+                    depth -= 1u;
+                    let saved_node = stack[depth];
+                    let new_pos = saved_node.voxel_pos + vec3<i32>(step_mask);
+                    let pos_check = saved_node.voxel_pos ^ vec3<i32>(mask);
+                    
+                    if all(new_pos == pos_check) {
+                        octree_exited = false;
+                        node = saved_node.node;
+                        break;
+                    }
+                }
+                if octree_exited {
+                    size = chunk_size * 0.5;
+                    depth = 0u;
+                    node = octree[0];
+                }
+            }
+        }
     }
 
     /*var x_overflow = global_pos.x;
@@ -401,9 +343,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     } else {
         return vec4<f32>(0.1, 0.2, 0.3, 1.0);
     }
-        //if ray_intersects_aabb(camera.origin, inv_direction, bvh[0].aabb) {
-        //    return vec4<f32>(1.0, 1.0, 0.0, 1.0);
-        //}
 
     //return textureSample(texture, t_sampler, in.tex_pos);
     let t = max(dot(-ray_direction, normal), 0.0);
