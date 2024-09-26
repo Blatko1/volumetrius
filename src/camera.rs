@@ -81,7 +81,7 @@ impl Camera {
         let delta_fov = (self.input_state.fov_change() * 2.0).to_radians();
         self.fov = (self.fov - delta_fov).clamp(FOV_MIN, FOV_MAX);
         self.focal_distance = 1.0 / (self.fov * 0.5).tan();
-        println!("origin: {}", self.origin);
+        //println!("origin: {}", self.origin);
         //println!("dir: {}", self.dir);
     }
 
@@ -91,8 +91,12 @@ impl Camera {
             self.origin.y - self.dir.y,
             self.origin.z - self.dir.z,
         );
-        let projection =
-            Matrix4::new_perspective((config.width as f32 / config.height as f32), self.fov, self.znear, self.zfar);
+        let projection = Matrix4::new_perspective(
+            (config.width as f32 / config.height as f32),
+            self.fov,
+            self.znear,
+            self.zfar,
+        );
         let view = Matrix4::look_at_lh(&self.origin, &target, &self.plane_vertical);
         projection * view
     }

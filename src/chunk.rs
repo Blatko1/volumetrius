@@ -5,7 +5,7 @@ const CHUNK_SIZE_CUBED: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 const CHUNK_SVO_DEPTH: usize = 5;
 
 pub struct Chunk {
-    data: [u32; CHUNK_SIZE_CUBED]
+    data: [u32; CHUNK_SIZE_CUBED],
 }
 
 impl Chunk {
@@ -23,13 +23,13 @@ impl Chunk {
 
 #[derive(Debug, Clone)]
 pub struct SvoChunk {
-    root: Node
+    root: Node,
 }
 
 impl SvoChunk {
     pub fn new() -> Self {
         Self {
-            root: Node::new_leaf()
+            root: Node::new_leaf(),
         }
     }
 
@@ -66,11 +66,11 @@ impl SvoChunk {
 #[derive(Debug, Clone, Copy, Default)]
 struct FlatNode {
     index: usize,
-    child_indices: Option<[usize; 8]>
+    child_indices: Option<[usize; 8]>,
 }
 
 /// If node is leaf -> children = None
-/// 
+///
 /// If node is parent -> children = Some(\[Some(...); 8\])
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -80,14 +80,12 @@ pub struct Node {
 
 impl Node {
     pub fn new_leaf() -> Self {
-        Self {
-            children: None
-        }
+        Self { children: None }
     }
 
     pub fn new_empty_parent() -> Self {
         Self {
-            children: Some(core::array::from_fn(|_| None))
+            children: Some(core::array::from_fn(|_| None)),
         }
     }
 
@@ -95,7 +93,7 @@ impl Node {
         if self.children.is_none() {
             *self = Self::new_empty_parent()
         }
-        let index = Self::pos_to_index(x, y, z, max_depth-1);
+        let index = Self::pos_to_index(x, y, z, max_depth - 1);
         let child = self.children.as_mut().unwrap().get_mut(index).unwrap();
 
         if child.is_none() {
@@ -119,7 +117,7 @@ impl Node {
         if let Some(children) = &self.children {
             node_list[index] = FlatNode {
                 index,
-                child_indices: Some([index+1, index+2, index+3, index+4, 
+                child_indices: Some([index+1, index+2, index+3, index+4,
                     index+5, index+6, index+7, index+8]),
             };
             for child in children {

@@ -6,6 +6,8 @@ use winit::{
     window::Window,
 };
 
+use super::SCREEN_TEXTURE_FORMAT;
+
 pub struct Ctx {
     window: Arc<Window>,
     surface: wgpu::Surface<'static>,
@@ -48,7 +50,9 @@ impl Ctx {
                 &wgpu::DeviceDescriptor {
                     label: Some("Request Device"),
                     required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                        | wgpu::Features::POLYGON_MODE_LINE | wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
+                        | wgpu::Features::POLYGON_MODE_LINE
+                        | wgpu::Features::TIMESTAMP_QUERY
+                        | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
                     required_limits: wgpu::Limits::default(),
                     memory_hints: wgpu::MemoryHints::Performance,
                 },
@@ -62,7 +66,7 @@ impl Ctx {
         let caps = surface.get_capabilities(&adapter);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: *caps.formats.first().unwrap(),
+            format: SCREEN_TEXTURE_FORMAT,
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Immediate,

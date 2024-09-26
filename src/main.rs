@@ -1,15 +1,14 @@
 mod backend;
 mod camera;
+mod chunk;
 mod control;
 mod object;
 mod renderer;
-mod chunk;
 
 use std::time::{Duration, Instant};
 
 use backend::ctx::Ctx;
 use backend::Canvas;
-use bvh::bounding_hierarchy::BoundingHierarchy;
 use camera::Camera;
 use chunk::{Node, SvoChunk};
 use control::{ControllerSettings, GameInput};
@@ -27,8 +26,8 @@ use winit::{
 };
 
 const FPS_CAP: u32 = 6000;
-const CANVAS_WIDTH: u32 = 16 * 1;
-const CANVAS_HEIGHT: u32 = 9 * 1;
+const CANVAS_WIDTH: u32 = 16 * 120;
+const CANVAS_HEIGHT: u32 = 9 * 120;
 const PHYSICS_TIMESTEP: f32 = 0.01;
 const SLEEP_BETWEEN_FRAMES: bool = false;
 
@@ -192,9 +191,18 @@ fn main() {
     let mut svo = SvoChunk::new();
     svo.add_voxel(1, 1, 1);
     svo.add_voxel(0, 1, 1);
-    println!("leafs: {}, nodes: {}", svo.leaf_count(), svo.valid_node_count());
+    println!(
+        "leafs: {}, nodes: {}",
+        svo.leaf_count(),
+        svo.valid_node_count()
+    );
     //svo.flatten();
-    println!("a {} {} {}", Node::pos_to_index(6, 6, 0, 2), Node::pos_to_index(1, 0, 0, 4), Node::pos_to_index(2, 0, 1, 4));
+    println!(
+        "a {} {} {}",
+        Node::pos_to_index(6, 6, 0, 2),
+        Node::pos_to_index(1, 0, 0, 4),
+        Node::pos_to_index(2, 0, 1, 4)
+    );
     //println!("mod: {}, %: {}", -14.0 - 32.0 * (-14.0/32.0f32).trunc(), -14.0 - 32.0 * (-14.0/32.0f32).floor());
     //panic!();
     //panic!("svo: {:?}", svo);
