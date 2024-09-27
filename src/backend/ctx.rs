@@ -65,7 +65,7 @@ impl Ctx {
         //    .expect("Surface isn't supported by the adapter.");
         let caps = surface.get_capabilities(&adapter);
         let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
             format: SCREEN_TEXTURE_FORMAT,
             width: size.width,
             height: size.height,

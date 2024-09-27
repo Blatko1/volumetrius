@@ -10,8 +10,6 @@ const max_depth = 8u;
 override screen_width: f32;
 override screen_height: f32;
 
-//const screen_size = vec2<f32>(screen_width, screen_height);
-
 struct Camera {
     origin: vec3<f32>,
     direction: vec3<f32>,
@@ -110,7 +108,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         // Using this method since it can go over the 'chunk_size'
         let local_pos = ((floored_pos % chunk_size) + chunk_size) % chunk_size;
         let voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> depth)) >> vec3<u32>(4u - depth));
-        let voxel_index = u32(voxel_pos.y << 2u | voxel_pos.z << 1u | voxel_pos.x);
+        let voxel_index = u32((voxel_pos.y << 2u) | (voxel_pos.z << 1u) | voxel_pos.x);
         // 128 -> 0b10000000
         let pos_mask = 128u >> voxel_index;
         if (node.valid_mask & pos_mask) != 0u {
@@ -131,26 +129,26 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             position += ray_direction * move_dist;
             // Used for increasing accuracy. Probably not needed.
             //position = round(position) * mask + position * (1.0 - mask);
-            /*mask = vec3<f32>(0.0);
-            if side_dist.x < side_dist.y {
-                if side_dist.x < side_dist.z {
-                    position += ray_direction * side_dist.x;
-                    position.x = round(position.x);
-                    mask.x = 1.0;
-                } else {
-                    position += ray_direction * side_dist.z;
-                    position.z = round(position.z);
-                    mask.z = 1.0;
-                }
-            } else if side_dist.y < side_dist.z {
-                position += ray_direction * side_dist.y;
-                position.y = round(position.y);
-                mask.y = 1.0;
-            } else {
-                position += ray_direction * side_dist.z;
-                position.z = round(position.z);
-                mask.z = 1.0;
-            }*/
+            //mask = vec3<f32>(0.0);
+            //if side_dist.x < side_dist.y {
+            //    if side_dist.x < side_dist.z {
+            //        position += ray_direction * side_dist.x;
+            //        position.x = round(position.x);
+            //        mask.x = 1.0;
+            //    } else {
+            //        position += ray_direction * side_dist.z;
+            //        position.z = round(position.z);
+            //        mask.z = 1.0;
+            //    }
+            //} else if side_dist.y < side_dist.z {
+            //    position += ray_direction * side_dist.y;
+            //    position.y = round(position.y);
+            //    mask.y = 1.0;
+            //} else {
+            //    position += ray_direction * side_dist.z;
+            //    position.z = round(position.z);
+            //    mask.z = 1.0;
+            //}
             let step_mask = mask * step;
             let new_pos = voxel_pos + vec3<i32>(step_mask);
             let pos_check = voxel_pos ^ vec3<i32>(mask);
@@ -174,8 +172,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
                     }
                 }
             }
-            if acc_dist > 400.0 {
-                textureStore(out_tex, id.xy, vec4<f32>(0.3, 0.2, 0.1, 1.0));
+            if acc_dist > 600.0 {
+                mask = vec3<f32>(0.0);
+                break;
             }
         }
     }
