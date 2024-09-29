@@ -1,7 +1,7 @@
 @group(0) @binding(0) 
 var out_tex: texture_storage_2d<rgba8unorm, write>;
 
-const epsilon = vec3<f32>(0.000001, 0.000001, 0.000001);
+const epsilon = vec3<f32>(1e-5);
 const chunk_size = 32.0;
 const chunks_per_dimension = 10.0;
 const chunks_count = 1000;
@@ -41,9 +41,8 @@ struct SavedNode {
 }
 
 fn modulo(a: vec3<f32>, b: f32, step: vec3<f32>) -> vec3<f32> {
-    var _a = a;
-    var half_b = b * 0.5;
-    _a = -step * (half_b - a) + half_b;
+    let half_b = b * 0.5;
+    let _a = step * (a - half_b) + half_b;
     //return _a - b * floor(_a / b);
     return ((_a % b) + b) % b;
 }
@@ -59,7 +58,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     var svo6: Node;
     var octree: array<Node, 6>;
     svo1.child_index = 1u;
-    svo1.valid_mask = 32u; // 0b00100000
+    svo1.valid_mask = 128u; // 0b10000000
     svo1.leaf_mask = 0u;  // 0b00000000
     octree[0] = svo1;
     svo2.child_index = 3u;
@@ -89,12 +88,12 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let ray_direction = normalize(pixel_x * camera.plane_h * camera.aspect_ratio + pixel_y * camera.plane_v + camera.direction * camera.focal_distance);
     let delta_dist = 1.0 / max(abs(ray_direction), epsilon);
     let step = sign(ray_direction);
-    var size = 32.0;
+    var size = chunk_size;
     var position = camera.origin;
     let should_floor = 0.5 * (1.0 - step);
 
-    //var side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
     size *= 0.5;
+    //var side_dist = -delta_dist * (step * (pos_fract - size * 0.5) - size * 0.5);
 
     var acc_dist = 0.0;
     var stack: array<SavedNode, max_depth>;
@@ -102,12 +101,18 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     var node = octree[0];
     var depth = 0u;
     for(var i = 0; i < 100; i++) {
-        let pos_fract = modulo(position, size, step);
-        //let offset = pos_fract - size;
+        let half_size = size * 0.5;
+        let adapted_pos = step * (position - half_size) + half_size;
+        let pos_fract = ((adapted_pos % size) + size) % size;
+        
         let floored_pos = position + (pos_fract - size) * should_floor;
-        // Using this method since it can go over the 'chunk_size'
-        let local_pos = ((floored_pos % chunk_size) + chunk_size) % chunk_size;
-        let voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> depth)) >> vec3<u32>(4u - depth));
+        // Using this method since the other can go over the 'chunk_size'
+        // Adding 'epsilon' because precision error happens ate axis zeroes.
+        let double_size = size * 2.0;
+        let local_pos = (((floored_pos + epsilon) % double_size) + double_size) % double_size;
+
+        //let voxel_pos = vec3<i32>((vec3<u32>(local_pos) & vec3<u32>(16u >> depth)) >> vec3<u32>(4u - depth));
+        let voxel_pos = vec3<i32>(local_pos / size);
         let voxel_index = u32((voxel_pos.y << 2u) | (voxel_pos.z << 1u) | voxel_pos.x);
         // 128 -> 0b10000000
         let pos_mask = 128u >> voxel_index;
@@ -149,8 +154,8 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             //    position.z = round(position.z);
             //    mask.z = 1.0;
             //}
-            let step_mask = mask * step;
-            let new_pos = voxel_pos + vec3<i32>(step_mask);
+            let step_mask = vec3<i32>(mask * step);
+            let new_pos = voxel_pos + step_mask;
             let pos_check = voxel_pos ^ vec3<i32>(mask);
             if any(new_pos != pos_check) && depth > 0u {
                 for(var j = 0u; j<max_depth; j++) {
@@ -163,7 +168,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
                     }
                     size *= 2.0;
                     let saved_node = stack[depth];
-                    let new_pos = saved_node.voxel_pos + vec3<i32>(step_mask);
+                    let new_pos = saved_node.voxel_pos + step_mask;
                     let pos_check = saved_node.voxel_pos ^ vec3<i32>(mask);
                     
                     if all(new_pos == pos_check) {
@@ -205,4 +210,5 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
     let t = max(dot(-ray_direction, normal), 0.0);
     textureStore(out_tex, id.xy, vec4<f32>(1.0 * t, 0.5 * t, 0.2 * t, 1.0));
+    //textureStore(out_tex, id.xy, vec4<f32>(acc_dist / 600.0, 0.0, 0.0, 1.0));
 }
