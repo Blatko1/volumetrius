@@ -1,5 +1,3 @@
-use std::io::Write;
-
 const CHUNK_SIZE: usize = 32;
 const CHUNK_SIZE_CUBED: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 const CHUNK_SVO_DEPTH: usize = 5;
@@ -23,13 +21,17 @@ impl Chunk {
 
 #[derive(Debug, Clone)]
 pub struct SvoChunk {
-    root: Node,
+    root: Box<Node>,
+    leaf_count: u32,
+    parent_count: u32,
 }
 
 impl SvoChunk {
     pub fn new() -> Self {
         Self {
-            root: Node::new_leaf(),
+            root: Box::new(Node::new_leaf()),
+            leaf_count: 1,
+            parent_count: 0
         }
     }
 
@@ -37,11 +39,36 @@ impl SvoChunk {
         assert!(x < CHUNK_SIZE, "Chunks x coord overflow: {}", x);
         assert!(y < CHUNK_SIZE, "Chunks y coord overflow: {}", y);
         assert!(z < CHUNK_SIZE, "Chunks z coord overflow: {}", z);
-        self.root.add_voxel(x, y, z, CHUNK_SVO_DEPTH);
+
+        let mut depth = CHUNK_SVO_DEPTH;
+        let mut node = &mut self.root; 
+        loop {
+            //println!("leafs: {}, parenst: {}", self.leaf_count, self.parent_count);
+            depth -= 1;
+            if node.children.is_none() {
+                println!("NEW");
+                node.children = Some(core::array::from_fn(|_| None));
+                self.parent_count += 1;
+                self.leaf_count -= 1;
+            }
+            let index = Self::pos_to_index(x, y, z, depth);
+            println!("index: {}", index);
+            let child = node.children.as_mut().unwrap().get_mut(index).unwrap();
+            if child.is_none() {
+                self.leaf_count += 1;
+            }
+            child.replace(Box::new(Node::new_leaf()));
+
+            if depth == 0 {
+                break;
+            }
+            std::mem::replace(&mut node, child.as_mut().unwrap());
+        }
     }
 
     pub fn flatten(&self) {
-        let mut node_list = vec![FlatNode::default(); self.valid_node_count()];
+        let capacity = (self.leaf_count + self.parent_count) as usize;
+        let mut node_list = vec![FlatNode::default(); capacity];
         println!("nodes before: {}", node_list.len());
 
         //self.root.flatten(&mut node_list, 0);
@@ -50,16 +77,23 @@ impl SvoChunk {
         println!("flat: {:?}", node_list);
     }
 
-    pub fn valid_leaf_count(&self) -> usize {
-        self.root.valid_leaf_count()
+    pub fn pos_to_index(x: usize, y: usize, z: usize, depth: usize) -> usize {
+        let local_x = (x & (0b00001 << depth)) >> depth;
+        let local_y = (y & (0b00001 << depth)) >> depth;
+        let local_z = (z & (0b00001 << depth)) >> depth;
+        local_y << 2 | local_z << 1 | local_x
     }
 
-    pub fn leaf_count(&self) -> usize {
-        self.root.leaf_count()
+    pub fn leaf_count(&self) -> u32 {
+        self.leaf_count
     }
 
-    pub fn valid_node_count(&self) -> usize {
-        self.root.valid_node_count()
+    pub fn parent_count(&self) -> u32 {
+        self.parent_count
+    }
+
+    pub fn valid_node_count(&self) -> u32 {
+        self.parent_count + self.leaf_count
     }
 }
 
@@ -75,41 +109,19 @@ struct FlatNode {
 #[derive(Debug, Clone)]
 pub struct Node {
     children: Option<[Option<Box<Node>>; 8]>,
-    //color: [f32; 3]
+    color: [f32; 3]
 }
 
 impl Node {
     pub fn new_leaf() -> Self {
-        Self { children: None }
+        Self { children: None, color: [0.0; 3] }
     }
 
     pub fn new_empty_parent() -> Self {
         Self {
             children: Some(core::array::from_fn(|_| None)),
+            color: [0.0; 3]
         }
-    }
-
-    pub fn add_voxel(&mut self, x: usize, y: usize, z: usize, max_depth: usize) {
-        if self.children.is_none() {
-            *self = Self::new_empty_parent()
-        }
-        let index = Self::pos_to_index(x, y, z, max_depth - 1);
-        let child = self.children.as_mut().unwrap().get_mut(index).unwrap();
-
-        if child.is_none() {
-            child.replace(Box::new(Node::new_leaf()));
-        }
-        if max_depth == 1 {
-            return;
-        }
-        child.as_mut().unwrap().add_voxel(x, y, z, max_depth - 1);
-    }
-
-    pub fn pos_to_index(x: usize, y: usize, z: usize, depth: usize) -> usize {
-        let local_x = x >> depth;
-        let local_y = y >> depth;
-        let local_z = z >> depth;
-        local_y << 2 | local_z << 1 | local_x
     }
 
     /*pub fn flatten(&self, node_list: &mut [FlatNode], next_idx: usize) {
@@ -130,49 +142,4 @@ impl Node {
             }
         }
     }*/
-
-    pub fn valid_leaf_count(&self) -> usize {
-        if let Some(children) = &self.children {
-            let mut count = 0;
-            for child in children {
-                if let Some(child) = child {
-                    count += child.leaf_count()
-                }
-            }
-            count
-        } else {
-            1
-        }
-    }
-
-    pub fn leaf_count(&self) -> usize {
-        if let Some(children) = &self.children {
-            let mut count = 0;
-            for child in children {
-                count += if let Some(child) = child {
-                    child.leaf_count()
-                } else {
-                    1
-                }
-            }
-            count
-        } else {
-            1
-        }
-    }
-
-    // TODO there is a more efficient way of just dividing the leaf count by 8
-    pub fn valid_node_count(&self) -> usize {
-        if let Some(children) = &self.children {
-            let mut count = 1;
-            for child in children {
-                if let Some(child) = child {
-                    count += child.valid_node_count();
-                }
-            }
-            count
-        } else {
-            1
-        }
-    }
 }

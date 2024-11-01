@@ -192,22 +192,13 @@ fn main() {
     svo.add_voxel(1, 1, 1);
     svo.add_voxel(0, 1, 1);
     println!(
-        "leafs: {}, nodes: {}",
+        "leafs: {}, parents: {}, valid: {}",
         svo.leaf_count(),
+        svo.parent_count(),
         svo.valid_node_count()
     );
     //svo.flatten();
-    println!(
-        "a {} {} {}",
-        Node::pos_to_index(6, 6, 0, 2),
-        Node::pos_to_index(1, 0, 0, 4),
-        Node::pos_to_index(2, 0, 1, 4)
-    );
-    //println!("mod: {}, %: {}", -14.0 - 32.0 * (-14.0/32.0f32).trunc(), -14.0 - 32.0 * (-14.0/32.0f32).floor());
-    //panic!();
-    //panic!("svo: {:?}", svo);
-    //let a = 32i32.pow(3) + 16i32.pow(3) + 8i32.pow(3) + 4i32.pow(3) + 2i32.pow(3) + 1;
-    //panic!("{}", a);
+    panic!("svo: {:?}", svo);
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut state = State::new();

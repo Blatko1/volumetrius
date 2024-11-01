@@ -4,6 +4,9 @@ use crate::camera::Camera;
 
 use super::ctx::Ctx;
 
+const WORKGROUP_WIDTH: u32 = 8;
+const WORKGROUP_HEIGHT: u32 = 8;
+
 pub struct RayTracerPipeline {
     compute_pipeline: wgpu::ComputePipeline,
     bind_group: wgpu::BindGroup,
@@ -130,8 +133,8 @@ impl RayTracerPipeline {
 
             camera_buffer,
 
-            workgroups_x: size.width / 8,
-            workgroups_y: size.height / 8
+            workgroups_x: size.width / WORKGROUP_WIDTH,
+            workgroups_y: size.height / WORKGROUP_HEIGHT
         }
     }
 
