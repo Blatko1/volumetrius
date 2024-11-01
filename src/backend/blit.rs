@@ -1,5 +1,7 @@
 use wgpu::util::DeviceExt;
 
+use super::ctx::Ctx;
+
 const TRIANGLE_VERTICES: [[f32; 2]; 3] = [
     [-1.0, -1.0], // bottom-left
     [3.0, -1.0],  // bottom-right
@@ -14,7 +16,10 @@ pub struct BlitPipeline {
 }
 
 impl BlitPipeline {
-    pub fn new(device: &wgpu::Device, target_texture_view: &wgpu::TextureView, sampler: &wgpu::Sampler) -> Self {
+    pub fn new(ctx: &Ctx, target_texture_view: &wgpu::TextureView, sampler: &wgpu::Sampler) -> Self {
+        let device = ctx.device();
+        let config = ctx.config();
+
         let triangle_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&TRIANGLE_VERTICES),
@@ -86,7 +91,7 @@ impl BlitPipeline {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: super::SCREEN_TEXTURE_FORMAT,
+                    format: config.format,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
