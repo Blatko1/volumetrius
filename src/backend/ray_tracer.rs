@@ -41,7 +41,7 @@ impl RayTracerPipeline {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
+            format: wgpu::TextureFormat::Bgra8Unorm,
             usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING
             | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
@@ -62,7 +62,7 @@ impl RayTracerPipeline {
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::StorageTexture { access: wgpu::StorageTextureAccess::WriteOnly, 
-                        format: wgpu::TextureFormat::Rgba8Unorm, 
+                        format: wgpu::TextureFormat::Bgra8Unorm, 
                         view_dimension: wgpu::TextureViewDimension::D2 },
                     count: None,
                 },

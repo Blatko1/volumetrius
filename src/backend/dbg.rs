@@ -18,6 +18,7 @@ pub struct DebugPipeline {
 impl DebugPipeline {
     pub fn new(ctx: &Ctx) -> Self {
         let device = ctx.device();
+        let config = ctx.config();
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("DBG Vertex Buffer"),
             contents: &[],
@@ -92,7 +93,7 @@ impl DebugPipeline {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: super::SCREEN_TEXTURE_FORMAT,
+                    format: config.format,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],

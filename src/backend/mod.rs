@@ -14,8 +14,6 @@ use crate::{camera::Camera, object::Object};
 
 use self::ctx::Ctx;
 
-pub const SCREEN_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
-
 // TODO better explanation
 pub struct Canvas {
     frame: Vec<u8>,
@@ -36,10 +34,10 @@ pub struct Canvas {
 
 impl Canvas {
     pub fn new(ctx: Ctx, canvas_width: u32, canvas_height: u32) -> Self {
-        let device = ctx.device();
+        let device: &wgpu::Device = ctx.device();
 
         let ray_tracer = RayTracerPipeline::new(&ctx);
-        let blit = BlitPipeline::new(ctx.device(), ray_tracer.target_texture_view(), ray_tracer.texture_sampler());
+        let blit = BlitPipeline::new(&ctx, ray_tracer.target_texture_view(), ray_tracer.texture_sampler());
         let dbg = DebugPipeline::new(&ctx);
 
         let bvh_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -110,7 +108,7 @@ impl Canvas {
             self.ray_tracer.compute_rays(&mut compute_pass);
         }
         encoder.copy_texture_to_texture(wgpu::ImageCopyTexture {
-            texture: &self.ray_tracer.target_texture(),
+            texture: self.ray_tracer.target_texture(),
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
@@ -200,7 +198,7 @@ impl Canvas {
             .iter()
             .map(|node| {
                 //println!("aaa: {:?}", node.aabb);
-                let var_name = BvhNode {
+                BvhNode {
                     aabb: AabbData {
                         min: node.aabb.min.into(),
                         _padding1: 0,
@@ -211,8 +209,7 @@ impl Canvas {
                     exit_index: node.exit_index,
                     shape_index: node.shape_index,
                     _padding3: 0,
-                };
-                var_name
+                }
             })
             .collect();
 
@@ -227,7 +224,7 @@ impl Canvas {
         let shapes_data: Vec<ShapeData> = shapes
             .iter()
             .map(|object| {
-                let var_name = ShapeData {
+                ShapeData {
                     global_aabb: AabbData {
                         min: object.global_aabb.min().into(),
                         _padding1: 0,
@@ -244,8 +241,7 @@ impl Canvas {
                     inv_rotation_matrix: Mat3::from_matrix3(
                         object.rotation.to_rotation_matrix().inverse().into(),
                     ),
-                };
-                var_name
+                }
             })
             .collect();
 
@@ -275,7 +271,7 @@ impl Canvas {
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         self.ctx.resize(new_size);
         self.ray_tracer = RayTracerPipeline::new(&self.ctx);
-        self.blit = BlitPipeline::new(self.ctx.device(), self.ray_tracer.target_texture_view(), self.ray_tracer.texture_sampler());
+        self.blit = BlitPipeline::new(&self.ctx, self.ray_tracer.target_texture_view(), self.ray_tracer.texture_sampler());
     }
 
     pub fn request_redraw(&self) {

@@ -6,8 +6,6 @@ use winit::{
     window::Window,
 };
 
-use super::SCREEN_TEXTURE_FORMAT;
-
 pub struct Ctx {
     window: Arc<Window>,
     surface: wgpu::Surface<'static>,
@@ -44,6 +42,8 @@ impl Ctx {
             })
             .await
             .unwrap();
+        let info = adapter.get_info();
+        println!("Adapter info: {:?}, {}, {}, {}, Size: {}x{}", info.device_type, info.backend, info.driver_info, info.name, size.width, size.height);
 
         let (device, queue) = adapter
             .request_device(
@@ -52,7 +52,7 @@ impl Ctx {
                     required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
                         | wgpu::Features::POLYGON_MODE_LINE
                         | wgpu::Features::TIMESTAMP_QUERY
-                        | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
+                        | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES | wgpu::Features::BGRA8UNORM_STORAGE,
                     required_limits: wgpu::Limits::default(),
                     memory_hints: wgpu::MemoryHints::Performance,
                 },
@@ -66,7 +66,7 @@ impl Ctx {
         let caps = surface.get_capabilities(&adapter);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
-            format: SCREEN_TEXTURE_FORMAT,
+            format: *caps.formats.first().unwrap(),
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Immediate,

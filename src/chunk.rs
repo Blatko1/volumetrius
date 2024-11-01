@@ -1,5 +1,3 @@
-use std::io::Write;
-
 const CHUNK_SIZE: usize = 32;
 const CHUNK_SIZE_CUBED: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 const CHUNK_SVO_DEPTH: usize = 5;
@@ -134,10 +132,8 @@ impl Node {
     pub fn valid_leaf_count(&self) -> usize {
         if let Some(children) = &self.children {
             let mut count = 0;
-            for child in children {
-                if let Some(child) = child {
-                    count += child.leaf_count()
-                }
+            for child in children.iter().flatten() {
+                count += child.leaf_count()
             }
             count
         } else {
@@ -165,10 +161,8 @@ impl Node {
     pub fn valid_node_count(&self) -> usize {
         if let Some(children) = &self.children {
             let mut count = 1;
-            for child in children {
-                if let Some(child) = child {
-                    count += child.valid_node_count();
-                }
+            for child in children.iter().flatten() {
+                count += child.valid_node_count();
             }
             count
         } else {

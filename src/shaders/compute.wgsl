@@ -1,5 +1,5 @@
 @group(0) @binding(0) 
-var out_tex: texture_storage_2d<rgba8unorm, write>;
+var out_tex: texture_storage_2d<bgra8unorm, write>;
 
 const epsilon = vec3<f32>(1e-5);
 const chunk_size = 32.0;
