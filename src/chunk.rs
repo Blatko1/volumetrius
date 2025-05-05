@@ -42,7 +42,7 @@ impl SvoChunk {
 
         let mut depth = CHUNK_SVO_DEPTH;
         let mut node = &mut self.root; 
-        loop {
+        /*loop {
             //println!("leafs: {}, parenst: {}", self.leaf_count, self.parent_count);
             depth -= 1;
             if node.children.is_none() {
@@ -63,7 +63,7 @@ impl SvoChunk {
                 break;
             }
             std::mem::replace(&mut node, child.as_mut().unwrap());
-        }
+        }*/
     }
 
     pub fn flatten(&self) {

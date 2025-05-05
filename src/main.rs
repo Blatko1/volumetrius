@@ -198,7 +198,7 @@ fn main() {
         svo.valid_node_count()
     );
     //svo.flatten();
-    panic!("svo: {:?}", svo);
+    //panic!("svo: {:?}", svo);
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut state = State::new();
